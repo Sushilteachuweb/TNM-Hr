@@ -1,0 +1,1262 @@
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:razorpay_flutter/razorpay_flutter.dart';
+import 'dart:developer' as developer;
+import 'dart:convert';
+import '../../core/app_colors.dart';
+import '../../core/app_text_styles.dart';
+import '../../Provider/plan_provider.dart';
+import '../../Provider/billing_provider.dart';
+import '../../Provider/credit_provider.dart';
+import '../../Provider/user_provider.dart';
+import '../../models/job_plan_model.dart';
+import '../../models/billing_history_model.dart';
+import '../../services/plan_api_service.dart';
+import '../../services/payment_verification_service.dart';
+import '../../services/user_storage.dart';
+import '../bottomNavBar/bottomNavBar.dart';
+import '../../widgets/skeleton_components.dart';
+
+class PlansScreen extends StatefulWidget {
+  const PlansScreen({super.key});
+
+  @override
+  State<PlansScreen> createState() => _PlansScreenState();
+}
+
+class _PlansScreenState extends State<PlansScreen> with SingleTickerProviderStateMixin {
+  late Razorpay _razorpay;
+  late TabController _tabController;
+  
+  // Store current order details for verification
+  String? _currentOrderId;
+  String? _currentPlanId;
+  String? _currentUserId;
+  int? _currentAmount;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 2, vsync: this);
+    _razorpay = Razorpay();
+    _razorpay.on(Razorpay.EVENT_PAYMENT_SUCCESS, _handlePaymentSuccess);
+    _razorpay.on(Razorpay.EVENT_PAYMENT_ERROR, _handlePaymentError);
+    _razorpay.on(Razorpay.EVENT_EXTERNAL_WALLET, _handleExternalWallet);
+    
+    // Data is already loaded by AppDataManager, just initialize billing history
+    // But also ensure plans are loaded in case AppDataManager wasn't called
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      Provider.of<BillingProvider>(context, listen: false).initialize();
+      
+      // Ensure plans are loaded
+      final planProvider = Provider.of<PlanProvider>(context, listen: false);
+      if (!planProvider.hasLoadedOnce) {
+        print("📋 Plans not loaded yet, fetching now...");
+        planProvider.fetchPlans();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    _razorpay.clear();
+    super.dispose();
+  }
+
+  void _handlePaymentSuccess(PaymentSuccessResponse response) async {
+    final startTime = DateTime.now();
+    
+    // Log payment success details for backend developer
+    developer.log(
+      json.encode({
+        'timestamp': DateTime.now().toIso8601String(),
+        'event': 'razorpay_payment_success',
+        'paymentId': response.paymentId,
+        'orderId': response.orderId,
+        'signatureReceived': response.signature?.isNotEmpty ?? false,
+        'currentOrderId': _currentOrderId,
+        'currentPlanId': _currentPlanId,
+        'currentMobileNumber': _currentUserId, // Now contains mobile number
+        'currentAmount': _currentAmount,
+      }),
+      name: 'PaymentFlow',
+    );
+    
+    // Show loading indicator
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(
+        child: CircularProgressIndicator(),
+      ),
+    );
+    
+    try {
+      // Verify payment with backend
+      final verificationResult = await PaymentVerificationService.verifyPayment(
+        orderId: response.orderId ?? _currentOrderId ?? '',
+        paymentId: response.paymentId ?? '',
+        signature: response.signature ?? '',
+        planId: _currentPlanId ?? '',
+        userId: _currentUserId ?? '',
+        amount: _currentAmount ?? 0,
+      );
+      
+      final processingTime = DateTime.now().difference(startTime).inMilliseconds;
+      
+      // Close loading dialog
+      if (mounted) Navigator.of(context).pop();
+      
+      if (verificationResult['success'] == true) {
+        // Payment verified successfully
+        final billingProvider = Provider.of<BillingProvider>(context, listen: false);
+        final creditProvider = Provider.of<CreditProvider>(context, listen: false);
+        
+        // Log successful verification
+        developer.log(
+          json.encode({
+            'timestamp': DateTime.now().toIso8601String(),
+            'event': 'payment_verification_success',
+            'orderId': response.orderId ?? _currentOrderId,
+            'paymentId': response.paymentId,
+            'processingTime': '${processingTime}ms',
+            'verificationMessage': verificationResult['message'],
+          }),
+          name: 'PaymentFlow',
+        );
+        
+        // Update billing record status to success
+        await billingProvider.updateBillingRecordStatus(
+          orderId: response.orderId ?? _currentOrderId ?? '',
+          status: 'Success',
+          paymentId: response.paymentId,
+        );
+        
+        // Recalculate credits after successful payment
+        await creditProvider.calculateAvailableCredits(forceRefresh: true);
+        
+        // Clear current order details
+        _clearCurrentOrderDetails();
+        
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text('Payment completed successfully!'),
+              backgroundColor: AppColors.success,
+              duration: const Duration(seconds: 3),
+            ),
+          );
+        }
+      } else {
+        // Payment verification failed
+        final billingProvider = Provider.of<BillingProvider>(context, listen: false);
+        
+        // Log verification failure
+        developer.log(
+          json.encode({
+            'timestamp': DateTime.now().toIso8601String(),
+            'event': 'payment_verification_failed',
+            'orderId': response.orderId ?? _currentOrderId,
+            'paymentId': response.paymentId,
+            'processingTime': '${processingTime}ms',
+            'failureReason': verificationResult['message'],
+            'verificationResponse': verificationResult,
+          }),
+          name: 'PaymentFlow',
+        );
+        
+        // Update billing record status to failed
+        await billingProvider.updateBillingRecordStatus(
+          orderId: response.orderId ?? _currentOrderId ?? '',
+          status: 'Failed',
+          paymentId: response.paymentId,
+        );
+        
+        // Clear current order details
+        _clearCurrentOrderDetails();
+        
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text('Payment processing failed. Please contact support if amount was deducted.'),
+              backgroundColor: AppColors.error,
+              duration: const Duration(seconds: 5),
+            ),
+          );
+        }
+      }
+    } catch (e, stackTrace) {
+      final processingTime = DateTime.now().difference(startTime).inMilliseconds;
+      
+      // Log exception details
+      developer.log(
+        json.encode({
+          'timestamp': DateTime.now().toIso8601String(),
+          'event': 'payment_verification_exception',
+          'orderId': response.orderId ?? _currentOrderId,
+          'paymentId': response.paymentId,
+          'processingTime': '${processingTime}ms',
+          'error': e.toString(),
+          'stackTrace': stackTrace.toString(),
+        }),
+        name: 'PaymentFlow',
+      );
+      
+      // Close loading dialog if still open
+      if (mounted) Navigator.of(context).pop();
+      
+      // Update billing record status to failed
+      final billingProvider = Provider.of<BillingProvider>(context, listen: false);
+      await billingProvider.updateBillingRecordStatus(
+        orderId: response.orderId ?? _currentOrderId ?? '',
+        status: 'Failed',
+        paymentId: response.paymentId,
+      );
+      
+      // Clear current order details
+      _clearCurrentOrderDetails();
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Payment processing temporarily unavailable. Please try again.'),
+            backgroundColor: AppColors.error,
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      }
+    }
+  }
+
+  void _handlePaymentError(PaymentFailureResponse response) async {
+    // Log payment error details for backend developer
+    developer.log(
+      json.encode({
+        'timestamp': DateTime.now().toIso8601String(),
+        'event': 'razorpay_payment_error',
+        'errorCode': response.code,
+        'errorMessage': response.message,
+        'currentOrderId': _currentOrderId,
+        'currentPlanId': _currentPlanId,
+        'currentMobileNumber': _currentUserId, // Now contains mobile number
+        'currentAmount': _currentAmount,
+      }),
+      name: 'PaymentFlow',
+    );
+    
+    // Update billing record status to failed if order exists
+    if (_currentOrderId != null) {
+      final billingProvider = Provider.of<BillingProvider>(context, listen: false);
+      await billingProvider.updateBillingRecordStatus(
+        orderId: _currentOrderId!,
+        status: 'Failed',
+      );
+    }
+    
+    // Clear current order details
+    _clearCurrentOrderDetails();
+    
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Payment was cancelled or failed. Please try again.'),
+          backgroundColor: AppColors.error,
+          duration: const Duration(seconds: 5),
+        ),
+      );
+    }
+  }
+
+  void _handleExternalWallet(ExternalWalletResponse response) {
+    // Log external wallet usage for backend developer
+    developer.log(
+      json.encode({
+        'timestamp': DateTime.now().toIso8601String(),
+        'event': 'razorpay_external_wallet',
+        'walletName': response.walletName,
+        'currentOrderId': _currentOrderId,
+        'currentPlanId': _currentPlanId,
+        'currentMobileNumber': _currentUserId, // Now contains mobile number
+        'currentAmount': _currentAmount,
+      }),
+      name: 'PaymentFlow',
+    );
+    
+    // Clear current order details since external wallet was used
+    _clearCurrentOrderDetails();
+    
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Payment redirected to ${response.walletName ?? 'external wallet'}'),
+          backgroundColor: AppColors.info,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    }
+  }
+
+  void _clearCurrentOrderDetails() {
+    developer.log(
+      json.encode({
+        'timestamp': DateTime.now().toIso8601String(),
+        'event': 'order_details_cleared',
+        'clearedOrderId': _currentOrderId,
+        'clearedPlanId': _currentPlanId,
+        'clearedMobileNumber': _currentUserId, // Now contains mobile number
+        'clearedAmount': _currentAmount,
+      }),
+      name: 'PaymentFlow',
+    );
+    
+    _currentOrderId = null;
+    _currentPlanId = null;
+    _currentUserId = null; // This now stores mobile number
+    _currentAmount = null;
+  }
+
+  Future<void> _buyPlan(JobPlan plan) async {
+    final startTime = DateTime.now();
+    
+    try {
+      // Get mobile number from UserStorage (use as userId for payment)
+      final mobileNumber = await UserStorage.getPhone();
+      
+      if (mobileNumber.isEmpty) {
+        developer.log(
+          json.encode({
+            'timestamp': DateTime.now().toIso8601String(),
+            'event': 'buy_plan_failed',
+            'reason': 'mobile_number_not_found',
+            'planId': plan.id,
+            'planName': plan.planName,
+          }),
+          name: 'PaymentFlow',
+        );
+        
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text('Please login again to continue.'),
+              backgroundColor: AppColors.error,
+            ),
+          );
+        }
+        return;
+      }
+      
+      developer.log(
+        json.encode({
+          'timestamp': DateTime.now().toIso8601String(),
+          'event': 'buy_plan_started',
+          'planId': plan.id,
+          'planName': plan.planName,
+          'amount': plan.pricePerMonth,
+          'mobileNumber': mobileNumber,
+        }),
+        name: 'PaymentFlow',
+      );
+      
+      // Create order using mobile number as userId
+      final orderResponse = await PlanApiService.buyPlan(
+        planId: plan.id,
+        userId: mobileNumber, // Using mobile number as userId
+        amount: plan.pricePerMonth,
+      );
+
+      final orderCreationTime = DateTime.now().difference(startTime).inMilliseconds;
+
+      if (orderResponse['success'] == true && orderResponse['order'] != null) {
+        final order = orderResponse['order'];
+        
+        developer.log(
+          json.encode({
+            'timestamp': DateTime.now().toIso8601String(),
+            'event': 'order_created_successfully',
+            'orderId': order['id'],
+            'amount': order['amount'],
+            'planId': plan.id,
+            'mobileNumber': mobileNumber,
+            'orderCreationTime': '${orderCreationTime}ms',
+          }),
+          name: 'PaymentFlow',
+        );
+        
+        // Store current order details for verification
+        _currentOrderId = order['id'];
+        _currentPlanId = plan.id;
+        _currentUserId = mobileNumber; // Store mobile number
+        _currentAmount = plan.pricePerMonth;
+        
+        // Add billing record as pending
+        await Provider.of<BillingProvider>(context, listen: false).addBillingRecord(
+          planName: plan.planName,
+          planId: plan.id,
+          amount: plan.pricePerMonth,
+          status: 'Pending',
+          paymentId: '',
+          orderId: order['id'],
+        );
+        
+        // Start Razorpay payment with the order details
+        var options = {
+          'key': 'rzp_test_RSsp7FsCxepW8t', // Updated Razorpay key
+          'amount': order['amount'], // Amount in paise
+          'name': 'Naukri Mitra',
+          'description': plan.planName,
+          'order_id': order['id'],
+          'prefill': {
+            'contact': mobileNumber, // Use actual mobile number
+            'email': 'test@example.com' // Should come from user profile
+          },
+          'theme': {
+            'color': '#2563EB'
+          }
+        };
+        
+        developer.log(
+          json.encode({
+            'timestamp': DateTime.now().toIso8601String(),
+            'event': 'razorpay_dialog_opening',
+            'orderId': order['id'],
+            'amount': order['amount'],
+            'mobileNumber': mobileNumber,
+            'razorpayOptions': {
+              'key': options['key'],
+              'amount': options['amount'],
+              'order_id': options['order_id'],
+              'name': options['name'],
+              'description': options['description'],
+              'contact': options['prefill']['contact'],
+            }
+          }),
+          name: 'PaymentFlow',
+        );
+        
+        _razorpay.open(options);
+      } else {
+        developer.log(
+          json.encode({
+            'timestamp': DateTime.now().toIso8601String(),
+            'event': 'order_creation_failed',
+            'planId': plan.id,
+            'mobileNumber': mobileNumber,
+            'orderCreationTime': '${orderCreationTime}ms',
+            'apiResponse': orderResponse,
+          }),
+          name: 'PaymentFlow',
+        );
+        
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text('Unable to process payment. Please try again.'),
+              backgroundColor: AppColors.error,
+            ),
+          );
+        }
+      }
+    } catch (e, stackTrace) {
+      final processingTime = DateTime.now().difference(startTime).inMilliseconds;
+      
+      developer.log(
+        json.encode({
+          'timestamp': DateTime.now().toIso8601String(),
+          'event': 'buy_plan_exception',
+          'planId': plan.id,
+          'processingTime': '${processingTime}ms',
+          'error': e.toString(),
+          'stackTrace': stackTrace.toString(),
+        }),
+        name: 'PaymentFlow',
+      );
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Payment service temporarily unavailable. Please try again.'),
+            backgroundColor: AppColors.error,
+            action: SnackBarAction(
+              label: 'Retry',
+              textColor: Colors.white,
+              onPressed: () {
+                _buyPlan(plan);
+              },
+            ),
+          ),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: IconButton(
+          icon: Icon(Icons.arrow_back_ios_rounded, color: AppColors.textPrimary),
+          onPressed: () {
+            // Navigate to home screen instead of going back
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const BottomNavBar(initialIndex: 0),
+              ),
+            );
+          },
+        ),
+        title: Text(
+          'Plans & Billing',
+          style: AppTextStyles.h3.copyWith(color: AppColors.textPrimary),
+        ),
+        centerTitle: true,
+        bottom: TabBar(
+          controller: _tabController,
+          labelColor: AppColors.primary,
+          unselectedLabelColor: AppColors.textSecondary,
+          indicatorColor: AppColors.primary,
+          indicatorWeight: 3,
+          labelStyle: AppTextStyles.subtitle2.copyWith(fontWeight: FontWeight.w600),
+          unselectedLabelStyle: AppTextStyles.subtitle2,
+          tabs: const [
+            Tab(text: 'Choose Plan'),
+            Tab(text: 'Billing History'),
+          ],
+        ),
+      ),
+      body: TabBarView(
+        controller: _tabController,
+        children: [
+          _buildChoosePlanTab(),
+          _buildBillingHistoryTab(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildChoosePlanTab() {
+    return Consumer<PlanProvider>(
+      builder: (context, planProvider, child) {
+        if (planProvider.isLoading) {
+          return const PlansScreenSkeleton();
+        }
+
+        if (planProvider.errorMessage.isNotEmpty) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.error_outline,
+                  size: 64,
+                  color: AppColors.error,
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Unable to load plans',
+                  style: AppTextStyles.h4,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  planProvider.errorMessage,
+                  style: AppTextStyles.body2,
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 24),
+                ElevatedButton(
+                  onPressed: () => planProvider.fetchPlans(forceRefresh: true),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                  ),
+                  child: const Text('Retry'),
+                ),
+              ],
+            ),
+          );
+        }
+
+        if (planProvider.plans.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.inbox_outlined,
+                  size: 64,
+                  color: AppColors.textSecondary,
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'No plans available',
+                  style: AppTextStyles.h4,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Please check back later',
+                  style: AppTextStyles.body2,
+                ),
+              ],
+            ),
+          );
+        }
+
+        return RefreshIndicator(
+          onRefresh: () => planProvider.fetchPlans(forceRefresh: true),
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Select the perfect plan for your hiring needs',
+                  style: AppTextStyles.subtitle1.copyWith(
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+                const SizedBox(height: 24),
+                ...planProvider.plans.map((plan) => _buildPlanCard(plan)),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildBillingHistoryTab() {
+    return Consumer<BillingProvider>(
+      builder: (context, billingProvider, child) {
+        return RefreshIndicator(
+          onRefresh: () => billingProvider.loadBillingHistory(),
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(20),
+            child: _buildBillingHistorySection(billingProvider),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildBillingHistorySection(BillingProvider billingProvider) {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.border),
+        boxShadow: [AppColors.cardShadow],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header
+          Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(
+                      Icons.history,
+                      color: AppColors.primary,
+                      size: 24,
+                    ),
+                    const SizedBox(width: 12),
+                    Text(
+                      'Billing History',
+                      style: AppTextStyles.h4.copyWith(
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                // Filter buttons
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: AppColors.surfaceLight,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _buildFilterButton('All', billingProvider.selectedFilter == 'all', billingProvider),
+                        _buildFilterButton('Success', billingProvider.selectedFilter == 'success', billingProvider),
+                        _buildFilterButton('Pending', billingProvider.selectedFilter == 'pending', billingProvider),
+                        _buildFilterButton('Failed', billingProvider.selectedFilter == 'failed', billingProvider),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          
+          // Table Header
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+            decoration: BoxDecoration(
+              color: AppColors.surfaceLight,
+              border: Border(
+                top: BorderSide(color: AppColors.border),
+                bottom: BorderSide(color: AppColors.border),
+              ),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  flex: 3,
+                  child: Text(
+                    'Date & Plan',
+                    style: AppTextStyles.subtitle2.copyWith(
+                      color: AppColors.textSecondary,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                Expanded(
+                  flex: 2,
+                  child: Text(
+                    'Amount',
+                    style: AppTextStyles.subtitle2.copyWith(
+                      color: AppColors.textSecondary,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+                Expanded(
+                  flex: 2,
+                  child: Text(
+                    'Status',
+                    style: AppTextStyles.subtitle2.copyWith(
+                      color: AppColors.textSecondary,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          
+          // Billing history data
+          if (billingProvider.isLoading)
+            const Padding(
+              padding: EdgeInsets.all(40),
+              child: BillingHistorySkeleton(),
+            )
+          else if (billingProvider.errorMessage.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.all(40),
+              child: Center(
+                child: Column(
+                  children: [
+                    Icon(Icons.error_outline, color: AppColors.error, size: 48),
+                    const SizedBox(height: 16),
+                    Text(
+                      billingProvider.errorMessage,
+                      style: AppTextStyles.body2.copyWith(color: AppColors.error),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
+              ),
+            )
+          else if (billingProvider.filteredBillingHistory.isEmpty)
+            Padding(
+              padding: const EdgeInsets.all(40),
+              child: Center(
+                child: Column(
+                  children: [
+                    Icon(Icons.receipt_long_outlined, color: AppColors.textSecondary, size: 48),
+                    const SizedBox(height: 16),
+                    Text(
+                      'No billing history found',
+                      style: AppTextStyles.body2.copyWith(color: AppColors.textSecondary),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          else
+            ...billingProvider.filteredBillingHistory.map((history) => _buildBillingHistoryRow(history)),
+          
+          // Show results count
+          if (!billingProvider.isLoading && billingProvider.errorMessage.isEmpty)
+            Padding(
+              padding: const EdgeInsets.all(20),
+              child: Center(
+                child: Text(
+                  'Showing ${billingProvider.filteredBillingHistory.length} of ${billingProvider.billingHistory.length} results',
+                  style: AppTextStyles.caption.copyWith(
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFilterButton(String text, bool isSelected, BillingProvider billingProvider) {
+    return GestureDetector(
+      onTap: () => billingProvider.setFilter(text.toLowerCase()),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: isSelected ? AppColors.primary : Colors.transparent,
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: Text(
+          text,
+          style: AppTextStyles.caption.copyWith(
+            color: isSelected ? Colors.white : AppColors.textSecondary,
+            fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBillingHistoryRow(BillingHistory history) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+      decoration: BoxDecoration(
+        border: Border(
+          bottom: BorderSide(color: AppColors.border.withOpacity(0.5)),
+        ),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            flex: 3,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  history.date,
+                  style: AppTextStyles.body2.copyWith(
+                    color: AppColors.textPrimary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  history.time,
+                  style: AppTextStyles.caption.copyWith(
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  history.planName,
+                  style: AppTextStyles.caption.copyWith(
+                    color: AppColors.primary,
+                  ),
+                ),
+                if (history.expiresOn != 'N/A') ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    'Expires: ${history.expiresOn}',
+                    style: AppTextStyles.caption.copyWith(
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          Expanded(
+            flex: 2,
+            child: Text(
+              history.formattedAmount,
+              style: AppTextStyles.body2.copyWith(
+                color: AppColors.textPrimary,
+                fontWeight: FontWeight.w600,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ),
+          Expanded(
+            flex: 2,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: history.statusColor.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    history.status,
+                    style: AppTextStyles.caption.copyWith(
+                      color: history.statusColor,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                GestureDetector(
+                  onTap: () {
+                    // TODO: Implement contact functionality
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Contact support functionality coming soon'),
+                      ),
+                    );
+                  },
+                  child: Icon(
+                    Icons.contact_support_outlined,
+                    color: AppColors.primary,
+                    size: 18,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPlanCard(JobPlan plan) {
+    return Consumer<BillingProvider>(
+      builder: (context, billingProvider, child) {
+        // Check if this plan is currently active based on billing history
+        bool isCurrentPlan = _isCurrentActivePlan(plan, billingProvider);
+        
+        return Container(
+          margin: const EdgeInsets.only(bottom: 20),
+          decoration: BoxDecoration(
+            gradient: plan.isRecommended 
+                ? LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      AppColors.primary.withOpacity(0.1),
+                      AppColors.primaryLight.withOpacity(0.05),
+                    ],
+                  )
+                : isCurrentPlan
+                    ? LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [
+                          AppColors.success.withOpacity(0.1),
+                          AppColors.success.withOpacity(0.05),
+                        ],
+                      )
+                    : null,
+            color: plan.isRecommended || isCurrentPlan ? null : AppColors.surface,
+            borderRadius: BorderRadius.circular(16),
+            border: plan.isRecommended 
+                ? Border.all(color: AppColors.primary, width: 2)
+                : isCurrentPlan
+                    ? Border.all(color: AppColors.success, width: 2)
+                    : Border.all(color: AppColors.border),
+            boxShadow: [AppColors.cardShadow],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Header with plan name and badges
+              Container(
+                padding: const EdgeInsets.all(20),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            plan.planName,
+                            style: AppTextStyles.h4.copyWith(
+                              color: plan.isRecommended 
+                                  ? AppColors.primary 
+                                  : isCurrentPlan
+                                      ? AppColors.success
+                                      : AppColors.textPrimary,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            plan.description,
+                            style: AppTextStyles.body2,
+                          ),
+                        ],
+                      ),
+                    ),
+                    Column(
+                      children: [
+                        if (isCurrentPlan)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 6,
+                            ),
+                            decoration: BoxDecoration(
+                              color: AppColors.success,
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.check_circle,
+                                  size: 14,
+                                  color: Colors.white,
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  'ACTIVE',
+                                  style: AppTextStyles.caption.copyWith(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        if (isCurrentPlan && plan.isRecommended)
+                          const SizedBox(height: 8),
+                        if (plan.isRecommended)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 6,
+                            ),
+                            decoration: BoxDecoration(
+                              gradient: AppColors.primaryGradient,
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Text(
+                              'RECOMMENDED',
+                              style: AppTextStyles.caption.copyWith(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              
+              // Pricing section
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      '₹${plan.pricePerMonth}',
+                      style: AppTextStyles.h2.copyWith(
+                        color: isCurrentPlan ? AppColors.success : AppColors.primary,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    if (plan.discountPercent > 0) ...[
+                      Text(
+                        '₹${plan.originalPrice}',
+                        style: AppTextStyles.body2.copyWith(
+                          decoration: TextDecoration.lineThrough,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppColors.success,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          '${plan.discountPercent}% OFF',
+                          style: AppTextStyles.caption.copyWith(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              
+              const SizedBox(height: 20),
+              
+              // Features section
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildFeatureItem(
+                      Icons.work_outline,
+                      '${plan.credits} Job Credits',
+                      AppColors.primary,
+                    ),
+                    _buildFeatureItem(
+                      Icons.schedule_outlined,
+                      'Valid for ${plan.validityDays} days',
+                      AppColors.secondary,
+                    ),
+                    _buildFeatureItem(
+                      Icons.visibility_outlined,
+                      'Job active for ${plan.jobActiveDays} days',
+                      AppColors.accent,
+                    ),
+                    if (plan.aiMatching)
+                      _buildFeatureItem(
+                        Icons.psychology_outlined,
+                        'AI-powered candidate matching',
+                        AppColors.info,
+                      ),
+                    if (plan.advancedFilters > 0)
+                      _buildFeatureItem(
+                        Icons.filter_list_outlined,
+                        '${plan.advancedFilters}+ Advanced Filters',
+                        AppColors.primary,
+                      ),
+                    if (plan.whatsappLead)
+                      _buildFeatureItem(
+                        Icons.message_outlined,
+                        'WhatsApp lead notifications',
+                        AppColors.success,
+                      ),
+                  ],
+                ),
+              ),
+              
+              const SizedBox(height: 24),
+              
+              // Buy button or Active status
+              Container(
+                padding: const EdgeInsets.all(20),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: isCurrentPlan
+                      ? Container(
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          decoration: BoxDecoration(
+                            color: AppColors.success.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: AppColors.success),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.check_circle,
+                                color: AppColors.success,
+                                size: 20,
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                'Currently Active',
+                                style: AppTextStyles.button.copyWith(
+                                  color: AppColors.success,
+                                ),
+                              ),
+                            ],
+                          ),
+                        )
+                      : ElevatedButton(
+                          onPressed: () => _buyPlan(plan),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: plan.isRecommended 
+                                ? AppColors.primary 
+                                : AppColors.textPrimary,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            elevation: plan.isRecommended ? 8 : 2,
+                          ),
+                          child: Text(
+                            'Buy Plan - ₹${plan.pricePerMonth}',
+                            style: AppTextStyles.button,
+                          ),
+                        ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildFeatureItem(IconData icon, String text, Color color) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(
+              icon,
+              size: 20,
+              color: color,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              text,
+              style: AppTextStyles.body1,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Helper method to check if a plan is currently active
+  bool _isCurrentActivePlan(JobPlan plan, BillingProvider billingProvider) {
+    // Get successful purchases from billing history
+    final successfulPurchases = billingProvider.getBillingHistoryByStatus('success');
+    
+    if (successfulPurchases.isEmpty) return false;
+    
+    // Find the most recent successful purchase for this plan
+    final planPurchases = successfulPurchases.where((history) => 
+      history.planId == plan.id || history.planName == plan.planName
+    ).toList();
+    
+    if (planPurchases.isEmpty) return false;
+    
+    // Sort by creation date (most recent first)
+    planPurchases.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    
+    final mostRecentPurchase = planPurchases.first;
+    
+    // Check if the plan is still valid (within validity period)
+    final purchaseDate = mostRecentPurchase.createdAt;
+    final expiryDate = purchaseDate.add(Duration(days: plan.validityDays));
+    final now = DateTime.now();
+    
+    // Plan is active if it hasn't expired
+    return now.isBefore(expiryDate);
+  }
+}
