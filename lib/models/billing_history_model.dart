@@ -28,7 +28,7 @@ class BillingHistory {
   });
 
   factory BillingHistory.fromJson(Map<String, dynamic> json) {
-    final createdAt = DateTime.parse(json['createdAt'] ?? DateTime.now().toIso8601String());
+    final createdAt = DateTime.parse(json['createdAt'] ?? DateTime.now().toIso8601String()).toLocal();
     
     return BillingHistory(
       id: json['_id'] ?? '',
@@ -50,8 +50,17 @@ class BillingHistory {
   }
 
   static String formatTime(DateTime dateTime) {
-    final hour = dateTime.hour > 12 ? dateTime.hour - 12 : dateTime.hour;
-    final period = dateTime.hour >= 12 ? 'pm' : 'am';
+    int hour = dateTime.hour;
+    final period = hour >= 12 ? 'pm' : 'am';
+    
+    // Convert to 12-hour format
+    if (hour == 0) {
+      hour = 12; // Midnight: 00:xx -> 12:xx am
+    } else if (hour > 12) {
+      hour = hour - 12; // Afternoon/Evening: 13:xx -> 1:xx pm
+    }
+    // hour == 12 stays as 12 (noon: 12:xx pm)
+    
     return '${hour.toString().padLeft(2, '0')}:${dateTime.minute.toString().padLeft(2, '0')} $period';
   }
 

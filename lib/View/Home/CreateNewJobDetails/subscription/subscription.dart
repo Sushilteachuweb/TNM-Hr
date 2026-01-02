@@ -3,7 +3,6 @@ import 'package:razorpay_flutter/razorpay_flutter.dart';
 import 'package:provider/provider.dart';
 import '../../../../core/app_colors.dart';
 import '../../../../core/app_text_styles.dart';
-import '../../../../Provider/job_provider.dart';
 import '../../../../Provider/plan_provider.dart';
 import '../../../../Provider/billing_provider.dart';
 import '../../../../Provider/credit_provider.dart';
@@ -13,6 +12,7 @@ import '../../../../models/job_plan_model.dart';
 import '../../../../services/plan_api_service.dart';
 import '../../../../services/payment_verification_service.dart';
 import '../../../../services/user_storage.dart';
+import '../../../../services/job_creation_service.dart';
 import '../../../bottomNavBar/bottomNavBar.dart';
 import '../../../../widgets/skeleton_components.dart';
 
@@ -36,10 +36,77 @@ class _SubscriptionState extends State<Subscription> {
     _razorpay.on(Razorpay.EVENT_PAYMENT_ERROR, _handlePaymentError);
     _razorpay.on(Razorpay.EVENT_EXTERNAL_WALLET, _handleExternalWallet);
     
-    // Fetch plans when screen loads
+    // Check if user already has credits when screen loads
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      Provider.of<PlanProvider>(context, listen: false).fetchPlans();
+      _checkCreditsAndProceed();
     });
+  }
+
+  /// Check if user has credits and create job directly if they do
+  Future<void> _checkCreditsAndProceed() async {
+    final unifiedBillingProvider = Provider.of<UnifiedBillingProvider>(context, listen: false);
+    final planProvider = Provider.of<PlanProvider>(context, listen: false);
+    
+    // Fetch latest credit data
+    await unifiedBillingProvider.fetchAllData();
+    final remainingCredits = unifiedBillingProvider.remainingCredits;
+    
+    print("💳 Subscription screen - Remaining credits: $remainingCredits");
+    
+    if (remainingCredits > 0) {
+      // User has credits - create job directly without showing plan selection
+      print("✅ User has credits, creating job directly from subscription screen");
+      
+      // Show loading indicator
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (dialogContext) => const Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+      
+      try {
+        // Create job with credit deduction
+        final success = await JobCreationService.createJobWithCreditDeduction(
+          context: context,
+          jobData: widget.jobData,
+        );
+        
+        // Remove loading indicator first
+        if (mounted && Navigator.canPop(context)) {
+          Navigator.of(context).pop(); // Remove loading dialog
+        }
+        
+        if (success) {
+          // Navigate to home screen after successful job creation
+          if (mounted) {
+            Navigator.of(context).pushAndRemoveUntil(
+              MaterialPageRoute(
+                builder: (context) => const BottomNavBar(initialIndex: 1),
+              ),
+              (Route<dynamic> route) => false,
+            );
+          }
+        } else {
+          // If job creation failed, show the plan selection screen as fallback
+          print("❌ Job creation failed, showing plan selection as fallback");
+          planProvider.fetchPlans();
+        }
+      } catch (e) {
+        // Remove loading indicator on error
+        if (mounted && Navigator.canPop(context)) {
+          Navigator.of(context).pop(); // Remove loading dialog
+        }
+        
+        print("❌ Job creation failed with error: $e, showing plan selection as fallback");
+        planProvider.fetchPlans();
+      }
+    } else {
+      // No credits - show plan selection
+      print("❌ No credits available, showing plan selection");
+      planProvider.fetchPlans();
+    }
   }
 
   void _handlePaymentSuccess(PaymentSuccessResponse response) async {
@@ -145,77 +212,21 @@ class _SubscriptionState extends State<Subscription> {
   }
 
   Future<void> _createJobAfterPayment(JobPlan? selectedPlan) async {
-    try {
-      final jobProvider = Provider.of<JobProvider>(context, listen: false);
-      
-      final success = await jobProvider.createJob(
-        hrPhone: widget.jobData['hrPhone'] ?? '',
-        title: widget.jobData['title'] ?? '',
-        companyName: widget.jobData['companyName'] ?? '',
-        jobCategory: widget.jobData['jobCategory'] ?? '',
-        jobType: widget.jobData['jobType'] ?? '',
-        planType: selectedPlan?.planName.toLowerCase().replaceAll(' ', '_') ?? 'basic',
-        salaryType: widget.jobData['salaryType'] ?? 'Fixed',
-        salaryRange: widget.jobData['salaryRange'] ?? {'min': 0, 'max': 0},
-        workLocation: widget.jobData['workLocation'] ?? 'Work From Home',
-        jobLocation: widget.jobData['jobLocation'] ?? 'Not specified',
-        preferredLocation: widget.jobData['preferredLocation'] ?? 'Not specified',
-        officeAddress: widget.jobData['officeAddress'] ?? 'Not specified',
-        floorDetails: widget.jobData['floorDetails'] ?? 'Ground Floor',
-        coordinates: widget.jobData['coordinates'] ?? [0.0, 0.0],
-        minimumEducation: widget.jobData['minimumEducation'] ?? "Bachelor's Degree",
-        englishLevel: widget.jobData['englishLevel'] ?? 'intermediate',
-        totalExperience: widget.jobData['totalExperience'] ?? '0-1 years',
-        openingFor: widget.jobData['openingFor'] ?? 'Any',
-        jobDescription: widget.jobData['jobDescription'] ?? 'Job description not provided',
-        ageRange: widget.jobData['ageRange'] ?? {'min': 18, 'max': 60},
-        gender: widget.jobData['gender'] ?? 'Both genders allowed',
-        openings: widget.jobData['openings'] ?? 1,
-        isWalkInInterview: widget.jobData['isWalkInInterview'] ?? false,
-        additionalPerks: widget.jobData['additionalPerks'] ?? [],
-        documents: widget.jobData['documents'] ?? ['Aadhar Card'],
-        communicationPreference: widget.jobData['communicationPreference'] ?? 'phone',
-        workingDays: widget.jobData['workingDays'] ?? 'monday-saturday',
-        jobTiming: widget.jobData['jobTiming'] ?? '9:00 AM - 6:00 PM',
-      );
-
-      if (success) {
-        // Deduct 1 credit for the job posting
-        final creditProvider = Provider.of<CreditProvider>(context, listen: false);
-        await creditProvider.deductCredits(1);
-        
-        // Navigate to home screen and remove all previous routes
+    // Use the shared job creation service
+    final success = await JobCreationService.createJobWithCreditDeduction(
+      context: context,
+      jobData: widget.jobData,
+      selectedPlan: selectedPlan,
+    );
+    
+    if (success) {
+      // Navigate to home screen after successful job creation
+      if (mounted) {
         Navigator.of(context).pushAndRemoveUntil(
           MaterialPageRoute(
-            builder: (context) => const BottomNavBar(initialIndex: 1), // Go to Jobs tab
+            builder: (context) => const BottomNavBar(initialIndex: 1),
           ),
-          (route) => false,
-        );
-        
-        // Note: Success message will be shown by the destination screen
-        // No need to show SnackBar here since we're navigating away
-      } else {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(jobProvider.errorMessage),
-              backgroundColor: AppColors.error,
-            ),
-          );
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('Unable to create job. Please try again.'),
-            backgroundColor: AppColors.error,
-            action: SnackBarAction(
-              label: 'Retry',
-              textColor: Colors.white,
-              onPressed: () => _createJobAfterPayment(selectedPlan),
-            ),
-          ),
+          (Route<dynamic> route) => false,
         );
       }
     }

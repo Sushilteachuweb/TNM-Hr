@@ -542,7 +542,7 @@ class _HomeScreenState extends State<HomeScreen> {
       shrinkWrap: true,
       crossAxisSpacing: 12,
       mainAxisSpacing: 12,
-      childAspectRatio: 2.0,
+      childAspectRatio: 1.6,
       physics: const NeverScrollableScrollPhysics(),
       children: [
         _buildStatCard(

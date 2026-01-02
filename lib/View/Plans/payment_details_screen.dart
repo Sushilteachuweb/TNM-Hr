@@ -283,7 +283,7 @@ class _PaymentDetailsScreenState extends State<PaymentDetailsScreen> {
         ),
         _buildInfoRow(
           'Updated At',
-          '${DateTime.parse(payment.updatedAt.toIso8601String()).day}/${DateTime.parse(payment.updatedAt.toIso8601String()).month}/${DateTime.parse(payment.updatedAt.toIso8601String()).year} ${DateTime.parse(payment.updatedAt.toIso8601String()).hour}:${DateTime.parse(payment.updatedAt.toIso8601String()).minute.toString().padLeft(2, '0')}',
+          payment.formattedUpdatedDateTime,
         ),
       ],
     );

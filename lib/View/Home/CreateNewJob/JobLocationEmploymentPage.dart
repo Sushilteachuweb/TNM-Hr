@@ -6,6 +6,9 @@ import '../../../core/app_colors.dart';
 import '../../../core/app_text_styles.dart';
 import '../../../Provider/job_form_provider.dart';
 import '../../../Provider/hr_profile_provider.dart';
+import '../../../Provider/unified_billing_provider.dart';
+import '../../../services/job_creation_service.dart';
+import '../../bottomNavBar/bottomNavBar.dart';
 import '../CreateNewJobDetails/subscription/subscription.dart';
 
 class JobLocationEmploymentPage extends StatefulWidget {
@@ -649,6 +652,7 @@ class _JobLocationEmploymentPageState extends State<JobLocationEmploymentPage> {
               onPressed: () async {
                 final formProvider = Provider.of<JobFormProvider>(context, listen: false);
                 final hrProvider = Provider.of<HrProfileProvider>(context, listen: false);
+                final unifiedBillingProvider = Provider.of<UnifiedBillingProvider>(context, listen: false);
                 
                 if (formProvider.isPage2Valid()) {
                   // Get HR profile data
@@ -678,13 +682,75 @@ class _JobLocationEmploymentPageState extends State<JobLocationEmploymentPage> {
                     coordinates: hrProvider.coordinates,
                   );
                   
-                  // Navigate to subscription page
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => Subscription(jobData: jobData),
-                    ),
-                  );
+                  // Check remaining credits before navigation
+                  await unifiedBillingProvider.fetchAllData();
+                  final remainingCredits = unifiedBillingProvider.remainingCredits;
+                  
+                  print("💳 Remaining credits: $remainingCredits");
+                  
+                  if (remainingCredits > 0) {
+                    // User has credits - create job directly
+                    print("✅ User has credits, creating job directly");
+                    
+                    // Show loading indicator
+                    showDialog(
+                      context: context,
+                      barrierDismissible: false,
+                      builder: (dialogContext) => const Center(
+                        child: CircularProgressIndicator(),
+                      ),
+                    );
+                    
+                    try {
+                      // Create job with credit deduction
+                      final success = await JobCreationService.createJobWithCreditDeduction(
+                        context: context,
+                        jobData: jobData,
+                      );
+                      
+                      // Remove loading indicator first
+                      if (mounted && Navigator.canPop(context)) {
+                        Navigator.of(context).pop(); // Remove loading dialog
+                      }
+                      
+                      if (success) {
+                        // Navigate to home screen after successful job creation
+                        if (mounted) {
+                          Navigator.of(context).pushAndRemoveUntil(
+                            MaterialPageRoute(
+                              builder: (context) => const BottomNavBar(initialIndex: 1),
+                            ),
+                            (Route<dynamic> route) => false,
+                          );
+                        }
+                      } else {
+                        print("❌ Job creation failed");
+                      }
+                    } catch (e) {
+                      // Remove loading indicator on error
+                      if (mounted && Navigator.canPop(context)) {
+                        Navigator.of(context).pop(); // Remove loading dialog
+                      }
+                      
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Error creating job: $e'),
+                            backgroundColor: AppColors.error,
+                          ),
+                        );
+                      }
+                    }
+                  } else {
+                    // No credits - navigate to subscription page
+                    print("❌ No credits available, showing plan selection");
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => Subscription(jobData: jobData),
+                      ),
+                    );
+                  }
                 } else {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(

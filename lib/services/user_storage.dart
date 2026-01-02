@@ -16,6 +16,7 @@ class UserStorage {
   static const String _skillsKey = 'skills';
   static const String _bioKey = 'bio';
   static const String _profileImageKey = 'profileImage';
+  static const String _profileCompletionSnackbarShownKey = 'profileCompletionSnackbarShown';
 
   /// Save login data after successful authentication
   static Future<void> saveLoginData({
@@ -125,5 +126,17 @@ class UserStorage {
     if (profileImage != null) {
       await prefs.setString(_profileImageKey, profileImage);
     }
+  }
+
+  /// Check if profile completion snackbar has been shown
+  static Future<bool> hasProfileCompletionSnackbarBeenShown() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_profileCompletionSnackbarShownKey) ?? false;
+  }
+
+  /// Mark profile completion snackbar as shown
+  static Future<void> markProfileCompletionSnackbarAsShown() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_profileCompletionSnackbarShownKey, true);
   }
 }

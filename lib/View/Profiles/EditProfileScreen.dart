@@ -252,51 +252,55 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     showModalBottomSheet(
       context: context,
       backgroundColor: AppColors.surface,
+      isScrollControlled: true,
+      useSafeArea: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (context) => Container(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: AppColors.border,
-                borderRadius: BorderRadius.circular(2),
+      builder: (context) => SafeArea(
+        child: Container(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: AppColors.border,
+                  borderRadius: BorderRadius.circular(2),
+                ),
               ),
-            ),
-            const SizedBox(height: 20),
-            Text("Select Profile Photo", style: AppTextStyles.h4),
-            const SizedBox(height: 20),
-            Row(
-              children: [
-                Expanded(
-                  child: _buildImageOption(
-                    icon: Icons.photo_library_outlined,
-                    title: "Gallery",
-                    onTap: () {
-                      Navigator.pop(context);
-                      _pickImageFromGallery();
-                    },
+              const SizedBox(height: 20),
+              Text("Select Profile Photo", style: AppTextStyles.h4),
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildImageOption(
+                      icon: Icons.photo_library_outlined,
+                      title: "Gallery",
+                      onTap: () {
+                        Navigator.pop(context);
+                        _pickImageFromGallery();
+                      },
+                    ),
                   ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: _buildImageOption(
-                    icon: Icons.camera_alt_outlined,
-                    title: "Camera",
-                    onTap: () {
-                      Navigator.pop(context);
-                      _pickImageFromCamera();
-                    },
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: _buildImageOption(
+                      icon: Icons.camera_alt_outlined,
+                      title: "Camera",
+                      onTap: () {
+                        Navigator.pop(context);
+                        _pickImageFromCamera();
+                      },
+                    ),
                   ),
-                ),
-              ],
-            ),
-          ],
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );

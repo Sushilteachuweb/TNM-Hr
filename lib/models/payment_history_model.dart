@@ -42,10 +42,10 @@ class PaymentHistory {
       amount: json['amount'] ?? 0,
       receipt: json['receipt'] ?? '',
       status: json['status'] ?? 'Pending',
-      createdAt: DateTime.parse(json['createdAt'] ?? DateTime.now().toIso8601String()),
-      updatedAt: DateTime.parse(json['updatedAt'] ?? DateTime.now().toIso8601String()),
-      validFrom: json['validFrom'] != null ? DateTime.parse(json['validFrom']) : null,
-      validUntil: json['validUntil'] != null ? DateTime.parse(json['validUntil']) : null,
+      createdAt: DateTime.parse(json['createdAt'] ?? DateTime.now().toIso8601String()).toLocal(),
+      updatedAt: DateTime.parse(json['updatedAt'] ?? DateTime.now().toIso8601String()).toLocal(),
+      validFrom: json['validFrom'] != null ? DateTime.parse(json['validFrom']).toLocal() : null,
+      validUntil: json['validUntil'] != null ? DateTime.parse(json['validUntil']).toLocal() : null,
     );
   }
 
@@ -73,12 +73,40 @@ class PaymentHistory {
   }
 
   String get formattedTime {
-    final hour = createdAt.hour > 12 ? createdAt.hour - 12 : createdAt.hour;
-    final period = createdAt.hour >= 12 ? 'pm' : 'am';
+    int hour = createdAt.hour;
+    final period = hour >= 12 ? 'pm' : 'am';
+    
+    // Convert to 12-hour format
+    if (hour == 0) {
+      hour = 12; // Midnight: 00:xx -> 12:xx am
+    } else if (hour > 12) {
+      hour = hour - 12; // Afternoon/Evening: 13:xx -> 1:xx pm
+    }
+    // hour == 12 stays as 12 (noon: 12:xx pm)
+    
     return '${hour.toString().padLeft(2, '0')}:${createdAt.minute.toString().padLeft(2, '0')} $period';
   }
 
-  String get formattedDateTime => '$formattedDate\n$formattedTime';
+  String get formattedUpdatedDate {
+    return '${updatedAt.day.toString().padLeft(2, '0')}/${updatedAt.month.toString().padLeft(2, '0')}/${updatedAt.year.toString().substring(2)}';
+  }
+
+  String get formattedUpdatedTime {
+    int hour = updatedAt.hour;
+    final period = hour >= 12 ? 'pm' : 'am';
+    
+    // Convert to 12-hour format
+    if (hour == 0) {
+      hour = 12; // Midnight: 00:xx -> 12:xx am
+    } else if (hour > 12) {
+      hour = hour - 12; // Afternoon/Evening: 13:xx -> 1:xx pm
+    }
+    // hour == 12 stays as 12 (noon: 12:xx pm)
+    
+    return '${hour.toString().padLeft(2, '0')}:${updatedAt.minute.toString().padLeft(2, '0')} $period';
+  }
+
+  String get formattedUpdatedDateTime => '$formattedUpdatedDate $formattedUpdatedTime';
   String get formattedAmount => '₹$amount';
 
   // Get status color based on status
