@@ -272,7 +272,8 @@ class AuthApiService {
         return {
           'success': true,
           'message': data['message'] ?? 'Signup successful',
-          'hrId': data['hrId']?.toString(),
+          'hrId': data['data']?['hrId']?.toString(),
+          'userId': data['data']?['id']?.toString(),
           'data': data,
         };
       } else {

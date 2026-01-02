@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import '../bottomNavBar/bottomNavBar.dart';
 import '../../core/app_colors.dart';
@@ -59,12 +60,13 @@ class _CreateProfileScreenState extends State<CreateProfileScreen> {
       });
 
       if (result['success'] == true) {
-        // Save hrId if returned from signup
-        if (result['hrId'] != null) {
+        // Save hrId and userId if returned from signup
+        if (result['hrId'] != null || result['userId'] != null) {
           await UserStorage.saveLoginData(
             phone: phone,
             isExistingUser: false,
             hrId: result['hrId'],
+            userId: result['userId'],
           );
         }
 
@@ -456,6 +458,9 @@ class _CreateProfileScreenState extends State<CreateProfileScreen> {
             hint: "Enter number of employees",
             icon: Icons.groups_outlined,
             keyboardType: TextInputType.number,
+            inputFormatters: [
+              FilteringTextInputFormatter.digitsOnly,
+            ],
             validator: (value) {
               if (value == null || value.isEmpty) {
                 return 'Please enter employee size';
@@ -476,6 +481,7 @@ class _CreateProfileScreenState extends State<CreateProfileScreen> {
     TextInputType? keyboardType,
     String? Function(String?)? validator,
     int maxLines = 1,
+    List<TextInputFormatter>? inputFormatters,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -490,6 +496,7 @@ class _CreateProfileScreenState extends State<CreateProfileScreen> {
           keyboardType: keyboardType,
           maxLines: maxLines,
           validator: validator,
+          inputFormatters: inputFormatters,
           style: AppTextStyles.body1,
           decoration: InputDecoration(
             hintText: hint,

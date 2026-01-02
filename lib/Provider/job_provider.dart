@@ -151,7 +151,7 @@ class JobProvider with ChangeNotifier {
         return false;
       }
       
-      await fetchJobs(); // Refresh list
+      await fetchJobs(forceRefresh: true); // Force refresh to get updated list
       notifyListeners();
       return true;
     } else {

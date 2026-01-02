@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
@@ -6,6 +7,7 @@ import '../../core/app_colors.dart';
 import '../../core/app_text_styles.dart';
 import '../../services/user_storage.dart';
 import '../../services/hr_profile_api_service.dart';
+import '../../services/session_manager.dart';
 import '../../Provider/hr_profile_provider.dart';
 
 class EditProfileScreen extends StatefulWidget {
@@ -127,23 +129,30 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           profilePhoto: validatedImage, // Only pass validated image
         );
 
-        // Update local storage
-        await UserStorage.updateUserProfile(
-          userName: _nameController.text,
-          userEmail: _emailController.text,
-          company: _companyController.text,
-          designation: _designationController.text,
-          experience: _experienceController.text,
-          location: _locationController.text,
-          skills: _skillsController.text,
-          bio: _bioController.text,
-          profileImage: validatedImage?.path,
-        );
+        // Handle session expiry
+        if (!await SessionManager.checkAndHandleResponse(context, result)) {
+          return; // Session expired, user redirected to login
+        }
 
-        // Update HR Profile Provider
-        if (mounted) {
-          final hrProfileProvider = Provider.of<HrProfileProvider>(context, listen: false);
-          await hrProfileProvider.loadProfileFromLocal();
+        // Only update local storage if API call succeeds
+        if (result['success'] == true) {
+          await UserStorage.updateUserProfile(
+            userName: _nameController.text,
+            userEmail: _emailController.text,
+            company: _companyController.text,
+            designation: _designationController.text,
+            experience: _experienceController.text,
+            location: _locationController.text,
+            skills: _skillsController.text,
+            bio: _bioController.text,
+            profileImage: validatedImage?.path,
+          );
+
+          // Update HR Profile Provider
+          if (mounted) {
+            final hrProfileProvider = Provider.of<HrProfileProvider>(context, listen: false);
+            await hrProfileProvider.loadProfileFromLocal();
+          }
         }
 
         if (mounted) {
@@ -540,6 +549,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       maxLines: maxLines,
       enabled: enabled,
       keyboardType: isNumeric ? TextInputType.number : TextInputType.text,
+      inputFormatters: isNumeric 
+          ? [
+              FilteringTextInputFormatter.digitsOnly,
+              LengthLimitingTextInputFormatter(2), // Limit to 2 digits (max 99 years)
+            ]
+          : null,
       validator: (value) {
         if (isRequired && (value == null || value.trim().isEmpty)) {
           return '$label is required';

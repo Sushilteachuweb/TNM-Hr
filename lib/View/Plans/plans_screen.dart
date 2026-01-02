@@ -8,14 +8,16 @@ import '../../core/app_text_styles.dart';
 import '../../Provider/plan_provider.dart';
 import '../../Provider/billing_provider.dart';
 import '../../Provider/credit_provider.dart';
-import '../../Provider/user_provider.dart';
+import '../../Provider/unified_billing_provider.dart';
 import '../../models/job_plan_model.dart';
 import '../../models/billing_history_model.dart';
+import '../../models/payment_history_model.dart';
 import '../../services/plan_api_service.dart';
 import '../../services/payment_verification_service.dart';
 import '../../services/user_storage.dart';
 import '../bottomNavBar/bottomNavBar.dart';
 import '../../widgets/skeleton_components.dart';
+import 'payment_details_screen.dart';
 
 class PlansScreen extends StatefulWidget {
   const PlansScreen({super.key});
@@ -46,7 +48,11 @@ class _PlansScreenState extends State<PlansScreen> with SingleTickerProviderStat
     // Data is already loaded by AppDataManager, just initialize billing history
     // But also ensure plans are loaded in case AppDataManager wasn't called
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      Provider.of<BillingProvider>(context, listen: false).initialize();
+      final unifiedBillingProvider = Provider.of<UnifiedBillingProvider>(context, listen: false);
+      if (!unifiedBillingProvider.hasLoadedOnce) {
+        print("📋 Unified billing data not loaded yet, fetching now...");
+        unifiedBillingProvider.fetchAllData();
+      }
       
       // Ensure plans are loaded
       final planProvider = Provider.of<PlanProvider>(context, listen: false);
@@ -135,6 +141,10 @@ class _PlansScreenState extends State<PlansScreen> with SingleTickerProviderStat
         
         // Recalculate credits after successful payment
         await creditProvider.calculateAvailableCredits(forceRefresh: true);
+        
+        // Refresh unified billing data after successful payment
+        final unifiedBillingProvider = Provider.of<UnifiedBillingProvider>(context, listen: false);
+        await unifiedBillingProvider.refresh();
         
         // Clear current order details
         _clearCurrentOrderDetails();
@@ -629,20 +639,20 @@ class _PlansScreenState extends State<PlansScreen> with SingleTickerProviderStat
   }
 
   Widget _buildBillingHistoryTab() {
-    return Consumer<BillingProvider>(
-      builder: (context, billingProvider, child) {
+    return Consumer<UnifiedBillingProvider>(
+      builder: (context, unifiedBillingProvider, child) {
         return RefreshIndicator(
-          onRefresh: () => billingProvider.loadBillingHistory(),
+          onRefresh: () => unifiedBillingProvider.refreshPaymentHistory(),
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(20),
-            child: _buildBillingHistorySection(billingProvider),
+            child: _buildBillingHistorySection(unifiedBillingProvider),
           ),
         );
       },
     );
   }
 
-  Widget _buildBillingHistorySection(BillingProvider billingProvider) {
+  Widget _buildBillingHistorySection(UnifiedBillingProvider unifiedBillingProvider) {
     return Container(
       decoration: BoxDecoration(
         color: AppColors.surface,
@@ -687,10 +697,10 @@ class _PlansScreenState extends State<PlansScreen> with SingleTickerProviderStat
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        _buildFilterButton('All', billingProvider.selectedFilter == 'all', billingProvider),
-                        _buildFilterButton('Success', billingProvider.selectedFilter == 'success', billingProvider),
-                        _buildFilterButton('Pending', billingProvider.selectedFilter == 'pending', billingProvider),
-                        _buildFilterButton('Failed', billingProvider.selectedFilter == 'failed', billingProvider),
+                        _buildFilterButton('All', unifiedBillingProvider.selectedFilter == 'all', unifiedBillingProvider),
+                        _buildFilterButton('Success', unifiedBillingProvider.selectedFilter == 'success', unifiedBillingProvider),
+                        _buildFilterButton('Pending', unifiedBillingProvider.selectedFilter == 'pending', unifiedBillingProvider),
+                        _buildFilterButton('Failed', unifiedBillingProvider.selectedFilter == 'failed', unifiedBillingProvider),
                       ],
                     ),
                   ),
@@ -748,12 +758,12 @@ class _PlansScreenState extends State<PlansScreen> with SingleTickerProviderStat
           ),
           
           // Billing history data
-          if (billingProvider.isLoading)
+          if (unifiedBillingProvider.paymentHistoryLoading)
             const Padding(
               padding: EdgeInsets.all(40),
               child: BillingHistorySkeleton(),
             )
-          else if (billingProvider.errorMessage.isNotEmpty)
+          else if (unifiedBillingProvider.paymentHistoryError.isNotEmpty)
             Padding(
               padding: const EdgeInsets.all(40),
               child: Center(
@@ -762,7 +772,7 @@ class _PlansScreenState extends State<PlansScreen> with SingleTickerProviderStat
                     Icon(Icons.error_outline, color: AppColors.error, size: 48),
                     const SizedBox(height: 16),
                     Text(
-                      billingProvider.errorMessage,
+                      unifiedBillingProvider.paymentHistoryError,
                       style: AppTextStyles.body2.copyWith(color: AppColors.error),
                       textAlign: TextAlign.center,
                     ),
@@ -770,7 +780,7 @@ class _PlansScreenState extends State<PlansScreen> with SingleTickerProviderStat
                 ),
               ),
             )
-          else if (billingProvider.filteredBillingHistory.isEmpty)
+          else if (unifiedBillingProvider.filteredPaymentHistory.isEmpty)
             Padding(
               padding: const EdgeInsets.all(40),
               child: Center(
@@ -787,15 +797,15 @@ class _PlansScreenState extends State<PlansScreen> with SingleTickerProviderStat
               ),
             )
           else
-            ...billingProvider.filteredBillingHistory.map((history) => _buildBillingHistoryRow(history)),
+            ...unifiedBillingProvider.filteredPaymentHistory.map((history) => _buildPaymentHistoryRow(history)),
           
           // Show results count
-          if (!billingProvider.isLoading && billingProvider.errorMessage.isEmpty)
+          if (!unifiedBillingProvider.paymentHistoryLoading && unifiedBillingProvider.paymentHistoryError.isEmpty)
             Padding(
               padding: const EdgeInsets.all(20),
               child: Center(
                 child: Text(
-                  'Showing ${billingProvider.filteredBillingHistory.length} of ${billingProvider.billingHistory.length} results',
+                  'Showing ${unifiedBillingProvider.filteredPaymentHistory.length} of ${unifiedBillingProvider.paymentHistory.length} results',
                   style: AppTextStyles.caption.copyWith(
                     color: AppColors.textSecondary,
                   ),
@@ -807,9 +817,9 @@ class _PlansScreenState extends State<PlansScreen> with SingleTickerProviderStat
     );
   }
 
-  Widget _buildFilterButton(String text, bool isSelected, BillingProvider billingProvider) {
+  Widget _buildFilterButton(String text, bool isSelected, UnifiedBillingProvider unifiedBillingProvider) {
     return GestureDetector(
-      onTap: () => billingProvider.setFilter(text.toLowerCase()),
+      onTap: () => unifiedBillingProvider.setFilter(text.toLowerCase()),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
@@ -822,6 +832,111 @@ class _PlansScreenState extends State<PlansScreen> with SingleTickerProviderStat
             color: isSelected ? Colors.white : AppColors.textSecondary,
             fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPaymentHistoryRow(PaymentHistory history) {
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => PaymentDetailsScreen(
+              orderId: history.orderId,
+              initialPayment: history,
+            ),
+          ),
+        );
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+        decoration: BoxDecoration(
+          border: Border(
+            bottom: BorderSide(color: AppColors.border.withOpacity(0.5)),
+          ),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              flex: 3,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    history.formattedDate,
+                    style: AppTextStyles.body2.copyWith(
+                      color: AppColors.textPrimary,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    history.formattedTime,
+                    style: AppTextStyles.caption.copyWith(
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Order: ${history.orderId}',
+                    style: AppTextStyles.caption.copyWith(
+                      color: AppColors.primary,
+                    ),
+                  ),
+                  if (history.validityPeriod != 'N/A') ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      'Valid: ${history.validityPeriod}',
+                      style: AppTextStyles.caption.copyWith(
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            Expanded(
+              flex: 2,
+              child: Text(
+                history.formattedAmount,
+                style: AppTextStyles.body2.copyWith(
+                  color: AppColors.textPrimary,
+                  fontWeight: FontWeight.w600,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+            Expanded(
+              flex: 2,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: history.statusColor.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      history.status,
+                      style: AppTextStyles.caption.copyWith(
+                        color: history.statusColor,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Icon(
+                    Icons.arrow_forward_ios,
+                    color: AppColors.textSecondary,
+                    size: 14,
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -930,10 +1045,11 @@ class _PlansScreenState extends State<PlansScreen> with SingleTickerProviderStat
   }
 
   Widget _buildPlanCard(JobPlan plan) {
-    return Consumer<BillingProvider>(
-      builder: (context, billingProvider, child) {
-        // Check if this plan is currently active based on billing history
-        bool isCurrentPlan = _isCurrentActivePlan(plan, billingProvider);
+    return Consumer<UnifiedBillingProvider>(
+      builder: (context, unifiedBillingProvider, child) {
+        // Check if this plan is currently active based on active plan API
+        bool isCurrentPlan = unifiedBillingProvider.hasActivePlan && 
+                           unifiedBillingProvider.activePlan?.planName == plan.planName;
         
         return Container(
           margin: const EdgeInsets.only(bottom: 20),
@@ -1232,31 +1348,4 @@ class _PlansScreenState extends State<PlansScreen> with SingleTickerProviderStat
     );
   }
 
-  // Helper method to check if a plan is currently active
-  bool _isCurrentActivePlan(JobPlan plan, BillingProvider billingProvider) {
-    // Get successful purchases from billing history
-    final successfulPurchases = billingProvider.getBillingHistoryByStatus('success');
-    
-    if (successfulPurchases.isEmpty) return false;
-    
-    // Find the most recent successful purchase for this plan
-    final planPurchases = successfulPurchases.where((history) => 
-      history.planId == plan.id || history.planName == plan.planName
-    ).toList();
-    
-    if (planPurchases.isEmpty) return false;
-    
-    // Sort by creation date (most recent first)
-    planPurchases.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-    
-    final mostRecentPurchase = planPurchases.first;
-    
-    // Check if the plan is still valid (within validity period)
-    final purchaseDate = mostRecentPurchase.createdAt;
-    final expiryDate = purchaseDate.add(Duration(days: plan.validityDays));
-    final now = DateTime.now();
-    
-    // Plan is active if it hasn't expired
-    return now.isBefore(expiryDate);
-  }
 }

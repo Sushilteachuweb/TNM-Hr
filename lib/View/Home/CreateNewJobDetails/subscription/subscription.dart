@@ -7,8 +7,11 @@ import '../../../../Provider/job_provider.dart';
 import '../../../../Provider/plan_provider.dart';
 import '../../../../Provider/billing_provider.dart';
 import '../../../../Provider/credit_provider.dart';
+import '../../../../Provider/active_plan_provider.dart';
+import '../../../../Provider/unified_billing_provider.dart';
 import '../../../../models/job_plan_model.dart';
 import '../../../../services/plan_api_service.dart';
+import '../../../../services/payment_verification_service.dart';
 import '../../../../services/user_storage.dart';
 import '../../../bottomNavBar/bottomNavBar.dart';
 import '../../../../widgets/skeleton_components.dart';
@@ -44,30 +47,83 @@ class _SubscriptionState extends State<Subscription> {
     final billingProvider = Provider.of<BillingProvider>(context, listen: false);
     final creditProvider = Provider.of<CreditProvider>(context, listen: false);
     
-    // Update billing record status to success
-    if (planProvider.selectedPlan != null) {
-      await billingProvider.updateBillingRecordStatus(
+    try {
+      // Get mobile number for verification (same as used in payment creation)
+      final userData = await UserStorage.getLoginData();
+      final mobileNumber = userData['phone']?.toString();
+      
+      if (mobileNumber == null || mobileNumber.isEmpty) {
+        throw Exception('Mobile number not found for payment verification');
+      }
+      
+      // Verify payment with backend
+      print("🔍 Starting payment verification...");
+      final verificationResult = await PaymentVerificationService.verifyPayment(
         orderId: response.orderId ?? '',
-        status: 'Success',
-        paymentId: response.paymentId,
+        paymentId: response.paymentId ?? '',
+        signature: response.signature ?? '',
+        planId: planProvider.selectedPlan?.id ?? '',
+        userId: mobileNumber, // Using mobile number as userId (as per API requirement)
+        amount: planProvider.selectedPlan?.pricePerMonth ?? 0,
       );
       
-      // Add credits from the purchased plan
-      await creditProvider.addCreditsFromPlan(
-        planProvider.selectedPlan!.id,
-        planProvider.selectedPlan!.planName,
+      if (verificationResult['success'] == true) {
+        print("✅ Payment verification successful");
+        
+        // Update billing record status to success
+        if (planProvider.selectedPlan != null) {
+          await billingProvider.updateBillingRecordStatus(
+            orderId: response.orderId ?? '',
+            status: 'Success',
+            paymentId: response.paymentId,
+          );
+          
+          // Add credits from the purchased plan
+          await creditProvider.addCreditsFromPlan(
+            planProvider.selectedPlan!.id,
+            planProvider.selectedPlan!.planName,
+          );
+        }
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Payment Successful: ${response.paymentId}'),
+            backgroundColor: AppColors.success,
+          ),
+        );
+
+        // Refresh active plan data after successful payment
+        try {
+          final activePlanProvider = Provider.of<ActivePlanProvider>(context, listen: false);
+          final unifiedBillingProvider = Provider.of<UnifiedBillingProvider>(context, listen: false);
+          
+          // Refresh both active plan providers to show updated plan status
+          await Future.wait([
+            activePlanProvider.fetchActivePlan(forceRefresh: true),
+            unifiedBillingProvider.fetchAllData(forceRefresh: true),
+            creditProvider.calculateAvailableCredits(forceRefresh: true), // Also refresh credits to show updated balance
+          ]);
+          
+          print("✅ Active plan data and credits refreshed after payment");
+        } catch (e) {
+          print("⚠️ Failed to refresh active plan data: $e");
+        }
+
+        // Call create job API after successful payment with selected plan
+        await _createJobAfterPayment(planProvider.selectedPlan);
+      } else {
+        print("❌ Payment verification failed: ${verificationResult['message']}");
+        throw Exception(verificationResult['message'] ?? 'Payment verification failed');
+      }
+    } catch (e) {
+      print("💥 Payment verification error: $e");
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Payment verification failed: $e'),
+          backgroundColor: AppColors.error,
+        ),
       );
     }
-    
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Payment Successful: ${response.paymentId}'),
-        backgroundColor: AppColors.success,
-      ),
-    );
-
-    // Call create job API after successful payment with selected plan
-    await _createJobAfterPayment(planProvider.selectedPlan);
   }
 
   void _handlePaymentError(PaymentFailureResponse response) {
@@ -554,23 +610,26 @@ class _SubscriptionState extends State<Subscription> {
     try {
       final billingProvider = Provider.of<BillingProvider>(context, listen: false);
       
-      // Get user ID from UserStorage
-      final userId = await UserStorage.getUserId();
+      // Get mobile number to use as userId (as per API requirement)
+      final userData = await UserStorage.getLoginData();
+      final mobileNumber = userData['phone']?.toString();
       
-      if (userId == null || userId.isEmpty) {
+      if (mobileNumber == null || mobileNumber.isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: const Text('User not found. Please login again.'),
+            content: const Text('Mobile number not found. Please login again.'),
             backgroundColor: AppColors.error,
           ),
         );
         return;
       }
       
+      print("📱 Using mobile number as userId for payment: $mobileNumber");
+      
       // Create order using the new buy plan API
       final orderResponse = await PlanApiService.buyPlan(
         planId: plan.id,
-        userId: userId,
+        userId: mobileNumber, // Using mobile number as userId (as per API requirement)
         amount: plan.pricePerMonth,
       );
 

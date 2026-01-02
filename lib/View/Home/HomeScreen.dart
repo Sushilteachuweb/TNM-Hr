@@ -6,6 +6,7 @@ import '../../core/app_text_styles.dart';
 import '../../Provider/job_provider.dart';
 import '../../Provider/user_provider.dart';
 import '../../Provider/credit_provider.dart';
+import '../../Provider/unified_billing_provider.dart';
 import '../Users/browse_users_screen.dart';
 import '../Jobs/job_details_screen.dart';
 import '../Helps/help_screen.dart';
@@ -44,9 +45,10 @@ class _HomeScreenState extends State<HomeScreen> {
       if (mounted) {
         final jobProvider = context.read<JobProvider>();
         final creditProvider = context.read<CreditProvider>();
+        final unifiedBillingProvider = context.read<UnifiedBillingProvider>();
         
         // If still showing skeleton after 10 seconds, force show content
-        if (!jobProvider.hasLoadedOnce || !creditProvider.hasLoadedOnce) {
+        if (!jobProvider.hasLoadedOnce || !creditProvider.hasLoadedOnce || !unifiedBillingProvider.hasLoadedOnce) {
           print("⚠️ Skeleton timeout reached - forcing content display");
           setState(() {
             _forceShowContent = true;
@@ -106,11 +108,12 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     final jobProvider = context.watch<JobProvider>();
     final creditProvider = context.watch<CreditProvider>();
+    final unifiedBillingProvider = context.watch<UnifiedBillingProvider>();
     
     // Show skeleton only if data hasn't been loaded yet AND we're loading candidates count for the first time
     // BUT allow force showing content after timeout
     bool shouldShowSkeleton = !_forceShowContent && 
-                              ((!jobProvider.hasLoadedOnce || !creditProvider.hasLoadedOnce) || 
+                              ((!jobProvider.hasLoadedOnce || !creditProvider.hasLoadedOnce || !unifiedBillingProvider.hasLoadedOnce) || 
                               (_loadingCandidatesCount && !_hasLoadedCandidatesCount));
     
     if (shouldShowSkeleton) {
@@ -528,7 +531,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildStatsGrid() {
     final jobProvider = context.watch<JobProvider>();
-    final creditProvider = context.watch<CreditProvider>();
+    final unifiedBillingProvider = context.watch<UnifiedBillingProvider>();
     final jobCounts = jobProvider.jobCounts;
 
     final activeJobs = jobCounts['active'] ?? 0;
@@ -568,7 +571,7 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         _buildStatCard(
           title: "Credits",
-          value: creditProvider.isLoading ? "..." : creditProvider.availableCredits.toString(),
+          value: unifiedBillingProvider.isLoading ? "..." : unifiedBillingProvider.remainingCredits.toString(),
           icon: Icons.account_balance_wallet_outlined,
           gradient: LinearGradient(
             colors: [Color(0xFF45B7D1), Color(0xFF3A9BC1)],

@@ -33,4 +33,13 @@ class ApiConfig {
   
   // Payment Verification endpoints
   static const String verifyPayment = "https://api.thenaukrimitra.com/api/payment/verify";
+  
+  // Active Plan endpoints
+  static String activePlan(String hrId) => "$baseUrl/active-plan/$hrId";
+  
+  // Payment History endpoints
+  static String paymentHistory(String mobileNumber) => "https://api.thenaukrimitra.com/api/payment/history/$mobileNumber";
+  
+  // Payment Details endpoints
+  static String paymentDetails(String orderId) => "https://api.thenaukrimitra.com/api/payment/details/$orderId";
 }

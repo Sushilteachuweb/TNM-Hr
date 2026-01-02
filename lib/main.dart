@@ -11,6 +11,8 @@ import 'Provider/user_provider.dart';
 import 'Provider/plan_provider.dart';
 import 'Provider/billing_provider.dart';
 import 'Provider/credit_provider.dart';
+import 'Provider/active_plan_provider.dart';
+import 'Provider/unified_billing_provider.dart';
 import 'SplashScreen/auth_splash_screen.dart';
 import 'core/app_colors.dart';
 
@@ -35,6 +37,8 @@ void main() {
         ChangeNotifierProvider(create: (_) => PlanProvider()),
         ChangeNotifierProvider(create: (_) => BillingProvider()),
         ChangeNotifierProvider(create: (_) => CreditProvider()),
+        ChangeNotifierProvider(create: (_) => ActivePlanProvider()),
+        ChangeNotifierProvider(create: (_) => UnifiedBillingProvider()),
       ],
       child: const MyApp(),
     ),

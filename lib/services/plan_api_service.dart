@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import 'api_routes.dart';
 import 'cookie_manager.dart';
 import 'payment_verification_service.dart';
+import 'user_storage.dart';
 
 class PlanApiService {
   static Future<Map<String, String>> _getHeaders() async {
@@ -152,5 +153,70 @@ class PlanApiService {
       userId: userId,
       amount: amount,
     );
+  }
+
+  /// Fetch active plan details
+  static Future<Map<String, dynamic>> fetchActivePlan() async {
+    try {
+      print("═══════════════════════════════════════");
+      print("📋 FETCH ACTIVE PLAN API CALL STARTED");
+      print("═══════════════════════════════════════");
+
+      // Get HR ID from storage
+      final hrId = await UserStorage.getHrId();
+      if (hrId == null || hrId.isEmpty || hrId == 'null') {
+        print("❌ No valid HR ID found in storage");
+        return {
+          'success': false,
+          'message': 'No HR ID found. Please login again.',
+          'data': null
+        };
+      }
+
+      final endpoint = ApiConfig.activePlan(hrId);
+      print("🔗 API Endpoint: $endpoint");
+      print("👤 HR ID: $hrId");
+      print("═══════════════════════════════════════");
+
+      final headers = await _getHeaders();
+      
+      final response = await http.get(
+        Uri.parse(endpoint),
+        headers: headers,
+      );
+
+      print("📊 Response Status Code: ${response.statusCode}");
+      print("📄 Response Body: ${response.body}");
+
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> responseData = json.decode(response.body);
+        
+        if (responseData['success'] == true) {
+          print("✅ Active plan fetched successfully");
+          return responseData;
+        } else {
+          print("❌ API returned success: false");
+          return {
+            'success': false,
+            'message': responseData['message'] ?? 'Failed to fetch active plan',
+            'data': null
+          };
+        }
+      } else {
+        print("❌ HTTP Error: ${response.statusCode}");
+        return {
+          'success': false,
+          'message': 'HTTP Error: ${response.statusCode}',
+          'data': null
+        };
+      }
+    } catch (e) {
+      print("💥 Exception in fetchActivePlan: $e");
+      return {
+        'success': false,
+        'message': 'Network error: $e',
+        'data': null
+      };
+    }
   }
 }

@@ -4,6 +4,8 @@ import '../Provider/job_provider.dart';
 import '../Provider/user_provider.dart';
 import '../Provider/credit_provider.dart';
 import '../Provider/plan_provider.dart';
+import '../Provider/active_plan_provider.dart';
+import '../Provider/unified_billing_provider.dart';
 
 class AppDataManager {
   static bool _hasInitialized = false;
@@ -27,6 +29,8 @@ class AppDataManager {
         _safeInitialize(() => context.read<UserProvider>().fetchUsers(), "UserProvider"),
         _safeInitialize(() => context.read<CreditProvider>().calculateAvailableCredits(), "CreditProvider"),
         _safeInitialize(() => context.read<PlanProvider>().fetchPlans(), "PlanProvider"),
+        _safeInitialize(() => context.read<ActivePlanProvider>().fetchActivePlan(), "ActivePlanProvider"),
+        _safeInitialize(() => context.read<UnifiedBillingProvider>().fetchAllData(), "UnifiedBillingProvider"),
       ]);
 
       // Check if any critical providers failed
@@ -69,6 +73,8 @@ class AppDataManager {
         context.read<UserProvider>().fetchUsers(forceRefresh: true),
         context.read<CreditProvider>().calculateAvailableCredits(forceRefresh: true),
         context.read<PlanProvider>().fetchPlans(forceRefresh: true),
+        context.read<ActivePlanProvider>().fetchActivePlan(forceRefresh: true),
+        context.read<UnifiedBillingProvider>().fetchAllData(forceRefresh: true),
       ]);
 
       print("✅ App data refresh completed");

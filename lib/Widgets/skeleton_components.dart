@@ -475,7 +475,9 @@ class BillingHistorySkeleton extends StatelessWidget {
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          const SkeletonContainer(width: 60, height: 20, borderRadius: BorderRadius.all(Radius.circular(12))),
+                          const Flexible(
+                            child: SkeletonContainer(width: 60, height: 20, borderRadius: BorderRadius.all(Radius.circular(12))),
+                          ),
                           const SizedBox(width: 8),
                           const SkeletonContainer(width: 18, height: 18, borderRadius: BorderRadius.all(Radius.circular(4))),
                         ],

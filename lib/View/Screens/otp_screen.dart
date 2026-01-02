@@ -3,6 +3,7 @@ import 'package:pinput/pinput.dart';
 import 'package:provider/provider.dart';
 import '../../Provider/Otp_provider.dart';
 import '../../Provider/LoginProvider.dart';
+import '../../Provider/hr_profile_provider.dart';
 import '../../core/app_colors.dart';
 import '../../core/app_text_styles.dart';
 import '../../services/auth_api_service.dart';
