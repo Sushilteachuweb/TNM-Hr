@@ -1,24 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../Provider/job_provider.dart';
-import '../Provider/credit_provider.dart';
 import '../models/job_plan_model.dart';
 import '../core/app_colors.dart';
 
 class JobCreationService {
-  /// Creates a job and deducts 1 credit
-  /// Returns true if successful, false otherwise
-  /// Note: This service does NOT handle navigation - calling code should handle it
-  static Future<bool> createJobWithCreditDeduction({
+  /// Creates a job as draft (no credit deduction)
+  /// Returns the job ID if successful, null otherwise
+  static Future<String?> createJobAsDraft({
     required BuildContext context,
     required Map<String, dynamic> jobData,
     JobPlan? selectedPlan,
   }) async {
     try {
       final jobProvider = Provider.of<JobProvider>(context, listen: false);
-      final creditProvider = Provider.of<CreditProvider>(context, listen: false);
       
-      // Create the job
+      // Create the job as draft
       final success = await jobProvider.createJob(
         hrPhone: jobData['hrPhone'] ?? '',
         title: jobData['title'] ?? '',
@@ -51,9 +48,13 @@ class JobCreationService {
       );
 
       if (success) {
-        // Deduct 1 credit for the job posting
-        await creditProvider.deductCredits(1);
-        return true;
+        // Get the created job ID from the jobs list (last created job)
+        final jobs = jobProvider.getDraftJobs();
+        if (jobs.isNotEmpty) {
+          final lastJob = jobs.last;
+          return lastJob['_id']?.toString() ?? lastJob['id']?.toString();
+        }
+        return null;
       } else {
         // Show error message
         if (context.mounted) {
@@ -64,7 +65,7 @@ class JobCreationService {
             ),
           );
         }
-        return false;
+        return null;
       }
     } catch (e) {
       // Show error message
@@ -76,7 +77,53 @@ class JobCreationService {
           ),
         );
       }
-      return false;
+      return null;
+    }
+  }
+
+  /// Publishes a draft job (checks credits and deducts 1 credit)
+  /// Returns a map with success status and optional navigation flag
+  static Future<Map<String, dynamic>> publishDraftJob({
+    required BuildContext context,
+    required String jobId,
+  }) async {
+    try {
+      final jobProvider = Provider.of<JobProvider>(context, listen: false);
+      
+      // Publish the job (API will check credits and deduct)
+      final result = await jobProvider.publishJob(jobId);
+      
+      if (result['success'] == true) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(result['message'] ?? 'Job published successfully'),
+              backgroundColor: AppColors.success,
+            ),
+          );
+        }
+        return {
+          'success': true,
+          'needsPlan': false,
+        };
+      } else {
+        // Check if error is about credits/plan
+        final message = result['message'] ?? '';
+        final needsPlan = message.toLowerCase().contains('plan') || 
+                         message.toLowerCase().contains('credit');
+        
+        return {
+          'success': false,
+          'message': message,
+          'needsPlan': needsPlan,
+        };
+      }
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Unable to publish job. Please try again.',
+        'needsPlan': false,
+      };
     }
   }
 }

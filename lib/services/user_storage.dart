@@ -16,6 +16,7 @@ class UserStorage {
   static const String _skillsKey = 'skills';
   static const String _bioKey = 'bio';
   static const String _profileImageKey = 'profileImage';
+  static const String _verificationDocumentKey = 'verificationDocument';
   static const String _profileCompletionSnackbarShownKey = 'profileCompletionSnackbarShown';
 
   /// Save login data after successful authentication
@@ -60,6 +61,7 @@ class UserStorage {
       'skills': prefs.getString(_skillsKey),
       'bio': prefs.getString(_bioKey),
       'profileImage': prefs.getString(_profileImageKey),
+      'verificationDocument': prefs.getString(_verificationDocumentKey),
     };
   }
 
@@ -110,6 +112,7 @@ class UserStorage {
     String? skills,
     String? bio,
     String? profileImage,
+    String? verificationDocument,
   }) async {
     final prefs = await SharedPreferences.getInstance();
 
@@ -125,6 +128,9 @@ class UserStorage {
     if (bio != null) await prefs.setString(_bioKey, bio);
     if (profileImage != null) {
       await prefs.setString(_profileImageKey, profileImage);
+    }
+    if (verificationDocument != null) {
+      await prefs.setString(_verificationDocumentKey, verificationDocument);
     }
   }
 

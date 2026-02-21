@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:google_places_flutter/google_places_flutter.dart';
+import 'package:google_places_flutter/model/prediction.dart';
 import 'dart:io';
 import '../../core/app_colors.dart';
 import '../../core/app_text_styles.dart';
@@ -30,6 +32,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   late TextEditingController _locationController;
   late TextEditingController _skillsController;
   late TextEditingController _bioController;
+  
+  // Add a unique key for the Google Places widget
+  final _locationKey = GlobalKey();
+  
+  // Add FocusNode to manage focus
+  final _locationFocusNode = FocusNode();
 
   File? _selectedImage;
   final ImagePicker _picker = ImagePicker();
@@ -75,6 +83,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     _designationController.dispose();
     _experienceController.dispose();
     _locationController.dispose();
+    _locationFocusNode.dispose();
     _skillsController.dispose();
     _bioController.dispose();
     super.dispose();
@@ -136,22 +145,77 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
         // Only update local storage if API call succeeds
         if (result['success'] == true) {
-          await UserStorage.updateUserProfile(
-            userName: _nameController.text,
-            userEmail: _emailController.text,
-            company: _companyController.text,
-            designation: _designationController.text,
-            experience: _experienceController.text,
-            location: _locationController.text,
-            skills: _skillsController.text,
-            bio: _bioController.text,
-            profileImage: validatedImage?.path,
-          );
+          print("✅ Profile update successful, updating local storage...");
+          
+          // Use the updated profile data from API response if available
+          Map<String, dynamic>? updatedProfile = result['updatedProfile'];
+          
+          if (updatedProfile != null) {
+            print("📦 Using updated profile from API response");
+            print("📦 Updated profile data: $updatedProfile");
+            
+            // Handle skills array
+            String? skillsStr;
+            if (updatedProfile['skills'] != null) {
+              if (updatedProfile['skills'] is List) {
+                final skillsList = updatedProfile['skills'] as List;
+                skillsStr = skillsList.isNotEmpty ? skillsList.join(', ') : null;
+              } else {
+                skillsStr = updatedProfile['skills'].toString();
+              }
+            } else {
+              skillsStr = _skillsController.text.isNotEmpty ? _skillsController.text : null;
+            }
+            
+            // Update local storage with API response data
+            await UserStorage.updateUserProfile(
+              userName: updatedProfile['fullName']?.toString() ?? _nameController.text,
+              userEmail: updatedProfile['email']?.toString() ?? _emailController.text,
+              company: updatedProfile['companyName']?.toString() ?? _companyController.text,
+              designation: updatedProfile['designation']?.toString() ?? _designationController.text,
+              experience: updatedProfile['experience']?.toString() ?? _experienceController.text,
+              location: updatedProfile['hrLocation']?.toString() ?? _locationController.text,
+              skills: skillsStr,
+              bio: updatedProfile['bio']?.toString() ?? _bioController.text,
+              profileImage: updatedProfile['profilePhoto']?.toString() ?? validatedImage?.path,
+            );
+          } else {
+            print("⚠️ No updated profile in response, using form values");
+            // Fallback to form values
+            await UserStorage.updateUserProfile(
+              userName: _nameController.text,
+              userEmail: _emailController.text,
+              company: _companyController.text,
+              designation: _designationController.text,
+              experience: _experienceController.text,
+              location: _locationController.text,
+              skills: _skillsController.text,
+              bio: _bioController.text,
+              profileImage: validatedImage?.path,
+            );
+          }
 
           // Update HR Profile Provider
           if (mounted) {
             final hrProfileProvider = Provider.of<HrProfileProvider>(context, listen: false);
-            await hrProfileProvider.loadProfileFromLocal();
+            
+            // If we have updated profile from API, use it directly
+            if (updatedProfile != null) {
+              hrProfileProvider.setProfileData(updatedProfile);
+              print("✅ Provider updated with API response data");
+            } else {
+              await hrProfileProvider.loadProfileFromLocal();
+            }
+            
+            // Add small delay to ensure all updates are complete
+            await Future.delayed(const Duration(milliseconds: 300));
+            
+            // Force fetch from API to ensure consistency
+            final hrId = await UserStorage.getHrId();
+            if (hrId != null && hrId.isNotEmpty) {
+              print("🔄 Fetching fresh profile data from API for verification...");
+              await hrProfileProvider.fetchProfile(hrId);
+            }
           }
         }
 
@@ -207,6 +271,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         maxWidth: 300,
         maxHeight: 300,
         imageQuality: 80,
+        requestFullMetadata: false, // Reduces permission requirements
       );
 
       if (image != null) {
@@ -230,6 +295,29 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         setState(() {
           _selectedImage = File(image.path);
         });
+      }
+    } on PlatformException catch (e) {
+      // Handle specific platform exceptions
+      String errorMessage = "Unable to select image. Please try again.";
+      
+      if (e.code == 'photo_access_denied') {
+        errorMessage = "Photo access denied. Please enable photo permissions in settings.";
+      } else if (e.code == 'camera_access_denied') {
+        errorMessage = "Camera access denied. Please enable camera permissions in settings.";
+      }
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(errorMessage),
+            backgroundColor: AppColors.error,
+            action: SnackBarAction(
+              label: 'Retry',
+              textColor: Colors.white,
+              onPressed: () => _pickImageFromSource(source),
+            ),
+          ),
+        );
       }
     } catch (e) {
       if (mounted) {
@@ -471,11 +559,82 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 isNumeric: true,
               ),
               const SizedBox(height: 16),
-              _buildTextField(
-                Icons.location_on_outlined,
-                "Location",
-                _locationController,
-                "Enter your location",
+              // Location - Google Places Autocomplete
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    "Location",
+                    style: AppTextStyles.subtitle2.copyWith(
+                      color: AppColors.textPrimary,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Container(
+                    key: _locationKey,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: GooglePlaceAutoCompleteTextField(
+                      textEditingController: _locationController,
+                      focusNode: _locationFocusNode,
+                      googleAPIKey: "AIzaSyAAxbBbwAa5E2Zr8PfLBVQeGNaJSYz6154",
+                      boxDecoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: AppColors.border, width: 1),
+                      ),
+                      inputDecoration: InputDecoration(
+                        hintText: "Search for your location",
+                        prefixIcon: Icon(Icons.location_on_outlined, color: AppColors.primary),
+                        border: InputBorder.none,
+                        enabledBorder: InputBorder.none,
+                        focusedBorder: InputBorder.none,
+                        disabledBorder: InputBorder.none,
+                        errorBorder: InputBorder.none,
+                        focusedErrorBorder: InputBorder.none,
+                        contentPadding: const EdgeInsets.all(16),
+                      ),
+                      debounceTime: 600,
+                      countries: const ["in"], // Restrict to India
+                      isLatLngRequired: false,
+                      getPlaceDetailWithLatLng: (Prediction prediction) {
+                        _locationController.text = prediction.description ?? "";
+                        print("📍 Profile Location selected: ${prediction.description}");
+                      },
+                      itemClick: (Prediction prediction) {
+                        // Set the value directly without clearing
+                        _locationController.text = prediction.description ?? "";
+                        _locationController.selection = TextSelection.fromPosition(
+                          TextPosition(offset: prediction.description?.length ?? 0),
+                        );
+                        // Unfocus to dismiss keyboard and prevent further input issues
+                        _locationFocusNode.unfocus();
+                      },
+                      seperatedBuilder: const Divider(),
+                      containerHorizontalPadding: 10,
+                      itemBuilder: (context, index, Prediction prediction) {
+                        return Container(
+                          padding: const EdgeInsets.all(10),
+                          child: Row(
+                            children: [
+                              Icon(Icons.location_on, color: AppColors.primary),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  prediction.description ?? "",
+                                  style: AppTextStyles.body2,
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                      isCrossBtnShown: true,
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: 16),
               _buildTextField(

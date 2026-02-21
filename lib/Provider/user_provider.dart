@@ -52,7 +52,8 @@ class UserProvider with ChangeNotifier {
         }
       }
     } catch (e) {
-      _errorMessage = 'Error processing users data: $e';
+      print("❌ User data processing error: $e");
+      _errorMessage = 'Unable to load users. Please try again.';
       if (skills == null && city == null && experience == null && keyword == null) {
         _hasLoadedOnce = true; // Mark as loaded even on error to prevent infinite skeleton
       }

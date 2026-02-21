@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/job_category_model.dart';
 import '../services/job_api_service.dart';
+import '../data/indian_states_cities.dart';
 
 class JobFormProvider with ChangeNotifier {
   // Job Categories
@@ -44,7 +45,12 @@ class JobFormProvider with ChangeNotifier {
   int minAge = 18;
   int maxAge = 50;
   String preferredLocation = ""; // City preference - will be set from dropdown
+  String preferredState = ""; // State preference - new field for state selection
+  String preferredCity = ""; // City preference - new field for city selection
   String gender = "Both genders allowed"; // Both genders allowed, Male only, Female only
+  
+  // Coordinates for preferred location
+  List<double> preferredCoordinates = [0.0, 0.0];
 
   // Additional properties for UI compatibility
   String get genderPreference => gender;
@@ -149,7 +155,56 @@ class JobFormProvider with ChangeNotifier {
 
   void setPreferredLocation(String value) {
     preferredLocation = value;
+    // Don't overwrite city and state if they're already set (from Google Places)
+    // Only parse if they're empty
+    if (value.isNotEmpty && preferredCity.isEmpty && preferredState.isEmpty) {
+      List<String> parts = value.split(',').map((e) => e.trim()).toList();
+      if (parts.length >= 2) {
+        if (preferredCity.isEmpty) {
+          preferredCity = parts[0];
+        }
+        if (preferredState.isEmpty && parts.length >= 3) {
+          preferredState = parts[parts.length - 2];
+        } else if (preferredState.isEmpty) {
+          preferredState = parts[parts.length - 1];
+        }
+      }
+    }
     notifyListeners();
+  }
+
+  void setPreferredState(String value) {
+    preferredState = value;
+    // Reset city when state changes
+    preferredCity = "";
+    // Update preferredLocation to combine state and city
+    _updatePreferredLocation();
+    notifyListeners();
+  }
+
+  void setPreferredCity(String value) {
+    preferredCity = value;
+    // Update preferredLocation to combine state and city
+    _updatePreferredLocation();
+    notifyListeners();
+  }
+  
+  void setPreferredCoordinates(double lat, double lng) {
+    preferredCoordinates = [lat, lng];
+    print("🌍 Coordinates stored in provider: [$lat, $lng]");
+    notifyListeners();
+  }
+
+  void _updatePreferredLocation() {
+    if (preferredState.isNotEmpty && preferredCity.isNotEmpty) {
+      preferredLocation = "$preferredCity, $preferredState";
+    } else if (preferredState.isNotEmpty) {
+      preferredLocation = preferredState;
+    } else if (preferredCity.isNotEmpty) {
+      preferredLocation = preferredCity;
+    } else {
+      preferredLocation = "";
+    }
   }
 
   void setGender(String value) {
@@ -299,6 +354,9 @@ class JobFormProvider with ChangeNotifier {
     minAge = 18;
     maxAge = 50;
     preferredLocation = "";
+    preferredState = "";
+    preferredCity = "";
+    preferredCoordinates = [0.0, 0.0];
     gender = "Both genders allowed";
 
     // PAGE 2: Location, Employment & Interview Details
@@ -404,7 +462,7 @@ class JobFormProvider with ChangeNotifier {
            minSalary.isNotEmpty &&
            maxSalary.isNotEmpty &&
            minimumEducation.isNotEmpty &&
-           preferredLocation.isNotEmpty &&
+           preferredLocation.isNotEmpty && // Changed from checking state and city separately
            jobDescription.isNotEmpty;
   }
 
@@ -503,7 +561,7 @@ class JobFormProvider with ChangeNotifier {
   // Get complete job data for API
   Map<String, dynamic> getJobData({
     required String hrPhone,
-    required List<double> coordinates,
+    List<double>? coordinates,
     String floorDetails = "",
   }) {
     // Convert all values to API format
@@ -534,6 +592,22 @@ class JobFormProvider with ChangeNotifier {
     // Ensure hrPhone is not empty
     String finalHrPhone = hrPhone.isNotEmpty ? hrPhone : "1234567890"; // Fallback phone
     
+    // Use coordinates from Google Places if available, otherwise try to get from city data
+    List<double> finalCoordinates = coordinates ?? preferredCoordinates;
+    
+    // If still [0.0, 0.0], try to get from IndianStatesAndCities
+    if ((finalCoordinates[0] == 0.0 && finalCoordinates[1] == 0.0) && 
+        preferredState.isNotEmpty && preferredCity.isNotEmpty) {
+      final cityCoordinates = IndianStatesAndCities.getCoordinatesForCity(preferredState, preferredCity);
+      finalCoordinates = cityCoordinates;
+    }
+    
+    // If still [0.0, 0.0], use a default location (center of India)
+    if (finalCoordinates[0] == 0.0 && finalCoordinates[1] == 0.0) {
+      finalCoordinates = [20.5937, 78.9629]; // Center of India
+      print("⚠️ Using default coordinates (center of India)");
+    }
+    
     // Debug logging
     print('🔍 Converting values:');
     print('  jobType: "$jobType" → "$apiJobType"');
@@ -542,6 +616,11 @@ class JobFormProvider with ChangeNotifier {
     print('  minimumEducation: "$minimumEducation" → "$apiEducation"');
     print('  totalExperience: "$totalExperience" → "$apiExperience"');
     print('  hrPhone: "$hrPhone" → "$finalHrPhone"');
+    print('🌍 LOCATION DATA:');
+    print('  preferredState: "$preferredState"');
+    print('  preferredCity: "$preferredCity"');
+    print('  combined preferredLocation: "$preferredLocation"');
+    print('  coordinates: $finalCoordinates');
 
     Map<String, dynamic> data = {
       'hrPhone': finalHrPhone,
@@ -560,7 +639,7 @@ class JobFormProvider with ChangeNotifier {
       'preferredLocation': preferredLocation,
       'officeAddress': officeAddress,
       'floorDetails': floorDetails.isNotEmpty ? floorDetails : 'N/A',
-      'coordinates': coordinates,
+      'coordinates': finalCoordinates,
       'minimumEducation': apiEducation,
       'englishLevel': englishLevel.isNotEmpty ? englishLevel : 'intermediate',
       'totalExperience': experienceString,

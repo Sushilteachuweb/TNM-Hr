@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../core/app_colors.dart';
 import '../../core/app_text_styles.dart';
+import '../../services/report_api_service.dart';
 import '../bottomNavBar/bottomNavBar.dart';
 
 class HelpScreen extends StatefulWidget {
@@ -12,6 +13,9 @@ class HelpScreen extends StatefulWidget {
 }
 
 class _HelpScreenState extends State<HelpScreen> {
+  final TextEditingController _reportController = TextEditingController();
+  final GlobalKey<FormState> _reportFormKey = GlobalKey<FormState>();
+  
   final List<Map<String, dynamic>> _faqs = [
     {
       'question': 'How do I post a new job?',
@@ -39,6 +43,12 @@ class _HelpScreenState extends State<HelpScreen> {
           'You can contact our support team through the contact form below or email us at support@thenaukrimitra.com | thenaukrimitra@gmail.com',
     },
   ];
+
+  @override
+  void dispose() {
+    _reportController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -73,6 +83,8 @@ class _HelpScreenState extends State<HelpScreen> {
             const SizedBox(height: 24),
             _buildQuickActions(),
             const SizedBox(height: 24),
+            _buildReportSection(),
+            const SizedBox(height: 24),
             _buildFAQsSection(),
             const SizedBox(height: 24),
             _buildContactSection(),
@@ -103,7 +115,7 @@ class _HelpScreenState extends State<HelpScreen> {
           Text(
             "Contact our support team for assistance",
             style: AppTextStyles.body2.copyWith(
-              color: Colors.white.withOpacity(0.9),
+              color: Colors.white.withValues(alpha: 0.9),
             ),
             textAlign: TextAlign.center,
           ),
@@ -164,7 +176,7 @@ class _HelpScreenState extends State<HelpScreen> {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: AppColors.primary.withOpacity(0.1),
+                color: AppColors.primary.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Icon(icon, color: AppColors.primary, size: 24),
@@ -186,6 +198,129 @@ class _HelpScreenState extends State<HelpScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildReportSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text("Report an Issue", style: AppTextStyles.h4),
+        const SizedBox(height: 16),
+        Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [AppColors.cardShadow],
+          ),
+          child: Form(
+            key: _reportFormKey,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: AppColors.error.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Icon(
+                        Icons.report_outlined,
+                        color: AppColors.error,
+                        size: 20,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            "Found an issue?",
+                            style: AppTextStyles.subtitle2.copyWith(
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          Text(
+                            "Let us know about any problems or concerns",
+                            style: AppTextStyles.caption,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _reportController,
+                  maxLines: 4,
+                  maxLength: 500,
+                  decoration: InputDecoration(
+                    hintText: "Describe the issue or concern you're experiencing...",
+                    hintStyle: AppTextStyles.body2.copyWith(
+                      color: AppColors.textHint,
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(color: AppColors.border),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(color: AppColors.border),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(color: AppColors.primary, width: 2),
+                    ),
+                    filled: true,
+                    fillColor: AppColors.background,
+                    contentPadding: const EdgeInsets.all(16),
+                  ),
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return 'Please describe the issue';
+                    }
+                    if (value.trim().length < 10) {
+                      return 'Please provide more details (at least 10 characters)';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: _submitReport,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      elevation: 2,
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.send_rounded, size: 18),
+                        const SizedBox(width: 8),
+                        Text(
+                          "Submit Report",
+                          style: AppTextStyles.button,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -282,7 +417,7 @@ class _HelpScreenState extends State<HelpScreen> {
             Container(
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                color: AppColors.primary.withOpacity(0.1),
+                color: AppColors.primary.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Icon(icon, color: AppColors.primary, size: 20),
@@ -312,6 +447,64 @@ class _HelpScreenState extends State<HelpScreen> {
         ),
       ),
     );
+  }
+
+  // Submit report method
+  void _submitReport() async {
+    if (_reportFormKey.currentState!.validate()) {
+      // Show loading indicator
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+      
+      try {
+        // Call the API service
+        final result = await ReportApiService.submitReport(
+          message: _reportController.text.trim(),
+        );
+        
+        // Hide loading indicator
+        if (mounted) Navigator.of(context).pop();
+        
+        if (result['success'] == true) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Row(
+                children: [
+                  const Icon(Icons.check_circle, color: Colors.white, size: 20),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      result['message'] ?? 'Report submitted successfully! We\'ll review it shortly.',
+                      style: AppTextStyles.body2.copyWith(color: Colors.white),
+                    ),
+                  ),
+                ],
+              ),
+              backgroundColor: Colors.green,
+              behavior: SnackBarBehavior.floating,
+              duration: const Duration(seconds: 3),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+          );
+          
+          // Clear the form
+          _reportController.clear();
+        } else {
+          _showErrorSnackBar(result['message'] ?? 'Failed to submit report. Please try again.');
+        }
+      } catch (e) {
+        // Hide loading indicator
+        if (mounted) Navigator.of(context).pop();
+        _showErrorSnackBar('Failed to submit report. Please try again.');
+      }
+    }
   }
 
   // Helper methods for launching external apps

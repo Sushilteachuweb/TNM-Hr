@@ -2,7 +2,9 @@
 
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
 import 'api_routes.dart';
 import 'cookie_manager.dart';
 
@@ -293,6 +295,130 @@ class AuthApiService {
       };
     } catch (e) {
       print("❌ Signup error: $e");
+      return {
+        'success': false,
+        'message': 'Something went wrong. Try again later.',
+      };
+    }
+  }
+
+  /// Signup with Document (New HR with verification document)
+  /// Creates session after signup
+  static Future<Map<String, dynamic>> signupWithDocument({
+    required String fullName,
+    required String phone,
+    required String companyName,
+    required String email,
+    required int totalEmp,
+    required File verificationDocument,
+    File? profilePhoto,
+  }) async {
+    try {
+      print("📝 Calling Signup API with Document: ${ApiConfig.signup}");
+
+      final headers = await _getHeaders();
+      headers.remove('Content-Type'); // Let http package set multipart content type
+
+      var request = http.MultipartRequest('POST', Uri.parse(ApiConfig.signup));
+      
+      // Add headers
+      request.headers.addAll(headers);
+
+      // Add form fields
+      request.fields['fullName'] = fullName;
+      request.fields['phone'] = phone;
+      request.fields['email'] = email;
+      request.fields['companyName'] = companyName;
+      request.fields['totalEmp'] = totalEmp.toString();
+
+      // Add verification document with explicit content type
+      String fileName = verificationDocument.path.split('/').last;
+      String? mimeType;
+      
+      // Determine MIME type based on file extension
+      if (fileName.toLowerCase().endsWith('.pdf')) {
+        mimeType = 'application/pdf';
+      } else if (fileName.toLowerCase().endsWith('.jpg') || fileName.toLowerCase().endsWith('.jpeg')) {
+        mimeType = 'image/jpeg';
+      } else if (fileName.toLowerCase().endsWith('.png')) {
+        mimeType = 'image/png';
+      }
+
+      request.files.add(
+        await http.MultipartFile.fromPath(
+          'verificationDocument',
+          verificationDocument.path,
+          contentType: mimeType != null ? MediaType.parse(mimeType) : null,
+        ),
+      );
+
+      // Add profile photo if provided
+      if (profilePhoto != null) {
+        String photoFileName = profilePhoto.path.split('/').last;
+        String? photoMimeType;
+        
+        if (photoFileName.toLowerCase().endsWith('.jpg') || photoFileName.toLowerCase().endsWith('.jpeg')) {
+          photoMimeType = 'image/jpeg';
+        } else if (photoFileName.toLowerCase().endsWith('.png')) {
+          photoMimeType = 'image/png';
+        }
+
+        request.files.add(
+          await http.MultipartFile.fromPath(
+            'profilePhoto',
+            profilePhoto.path,
+            contentType: photoMimeType != null ? MediaType.parse(photoMimeType) : null,
+          ),
+        );
+        print("📸 Added profile photo: ${profilePhoto.path}");
+      }
+
+      print("📝 Request Fields: ${request.fields}");
+      print("📝 Request File: ${verificationDocument.path}");
+      print("📝 File Name: $fileName");
+      print("📝 MIME Type: $mimeType");
+
+      final streamedResponse = await request.send().timeout(const Duration(seconds: 30));
+      final response = await http.Response.fromStream(streamedResponse);
+
+      print("📝 Raw Response: ${response.body}");
+      print("📝 Status Code: ${response.statusCode}");
+
+      // Save session cookie
+      final cookie = CookieManager.extractCookie(response.headers);
+      if (cookie != null) {
+        await CookieManager.saveCookie(cookie);
+      }
+
+      final data = jsonDecode(response.body);
+      print("📝 Decoded JSON: $data");
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        print("✅ Signup with document successful");
+        return {
+          'success': true,
+          'message': data['message'] ?? 'Signup successful',
+          'hrId': data['data']?['hrId']?.toString(),
+          'userId': data['data']?['id']?.toString(),
+          'data': data,
+        };
+      } else {
+        print("❌ Signup with document failed: ${data['message']}");
+        return {
+          'success': false,
+          'message': data['message'] is List
+              ? data['message'].join(', ')
+              : data['message']?.toString() ?? 'Signup failed',
+        };
+      }
+    } on TimeoutException catch (e) {
+      print("⏱️ Timeout Error: $e");
+      return {
+        'success': false,
+        'message': 'Server is not responding. Try again later.',
+      };
+    } catch (e) {
+      print("❌ Signup with document error: $e");
       return {
         'success': false,
         'message': 'Something went wrong. Try again later.',

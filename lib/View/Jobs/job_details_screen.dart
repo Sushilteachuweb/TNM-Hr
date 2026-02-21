@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 import '../../core/app_colors.dart';
 import '../../core/app_text_styles.dart';
+import '../../Provider/job_provider.dart';
 import 'Applicants/applicants.dart';
 import 'edit_job_screen.dart';
 import '../../widgets/skeleton_components.dart';
@@ -27,8 +29,18 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
         setState(() {
           _isLoading = false;
         });
+        // Update applicant count for this job
+        _updateApplicantCount();
       }
     });
+  }
+
+  /// Update applicant count for this specific job
+  void _updateApplicantCount() {
+    final jobId = widget.job['_id']?.toString() ?? widget.job['id']?.toString();
+    if (jobId != null && jobId.isNotEmpty) {
+      context.read<JobProvider>().updateJobApplicantCount(jobId);
+    }
   }
 
   @override

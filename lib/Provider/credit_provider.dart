@@ -96,7 +96,8 @@ class CreditProvider with ChangeNotifier {
       _hasLoadedOnce = true; // Mark as loaded
       _errorMessage = '';
     } catch (e) {
-      _errorMessage = 'Failed to calculate credits: $e';
+      print("❌ Error calculating credits: $e");
+      _errorMessage = 'Unable to load credit information. Please try again.';
       print("❌ Error calculating credits: $e");
       // Set hasLoadedOnce to true even on error to prevent infinite skeleton loading
       _hasLoadedOnce = true;

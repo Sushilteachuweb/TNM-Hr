@@ -3,11 +3,12 @@ import 'package:flutter/material.dart';
 class Job {
   final String? id;
   final String hrPhone;
+  final String? hrId;
   final String title;
   final String companyName;
   final String jobCategory;
   final String jobType;
-  final String planType;
+  final List<String> planType; // Changed from String to List<String>
   final SalaryDetails salaryDetails;
   final LocationDetails locationDetails;
   final CandidateRequirements candidateRequirements;
@@ -19,11 +20,16 @@ class Job {
   final String jobDescription;
   final DateTime? createdAt;
   final DateTime? updatedAt;
-  final String? status; // active, pending, closed
+  final String? status; // active, pending, closed, draft
+  final bool isPublished;
+  final bool isFeatured;
+  final int views;
+  final List<dynamic> applications;
 
   Job({
     this.id,
     required this.hrPhone,
+    this.hrId,
     required this.title,
     required this.companyName,
     required this.jobCategory,
@@ -41,36 +47,68 @@ class Job {
     this.createdAt,
     this.updatedAt,
     this.status,
+    this.isPublished = false,
+    this.isFeatured = false,
+    this.views = 0,
+    this.applications = const [],
   });
 
   factory Job.fromJson(Map<String, dynamic> json) {
+    // Handle planType - can be array or string
+    List<String> planTypeList = [];
+    if (json['planType'] != null) {
+      if (json['planType'] is List) {
+        planTypeList = List<String>.from(json['planType']);
+      } else if (json['planType'] is String) {
+        planTypeList = [json['planType']];
+      }
+    }
+
     return Job(
       id: json['_id'] ?? json['id'],
       hrPhone: json['hrPhone'] ?? '',
+      hrId: json['hrId'],
       title: json['title'] ?? '',
       companyName: json['companyName'] ?? '',
       jobCategory: json['jobCategory'] ?? '',
       jobType: json['jobType'] ?? '',
-      planType: json['planType'] ?? '',
+      planType: planTypeList,
       salaryDetails: SalaryDetails.fromJson(json['salaryDetails'] ?? json),
       locationDetails: LocationDetails.fromJson(json['locationDetails'] ?? json),
       candidateRequirements: CandidateRequirements.fromJson(json['candidateRequirements'] ?? json),
       employmentDetails: EmploymentDetails.fromJson(json['employmentDetails'] ?? json),
       jobTiming: JobTiming.fromJson(json['jobTiming'] ?? json),
       additionalPerks: List<String>.from(json['additionalPerks'] ?? []),
-      documentsRequired: List<String>.from(json['documents'] ?? json['documentsRequired'] ?? []),
+      documentsRequired: _parseDocuments(json['documents'] ?? json['documentsRequired']),
       communicationPreference: json['communicationPreference'] ?? '',
       jobDescription: json['jobDescription'] ?? '',
       createdAt: json['createdAt'] != null ? DateTime.parse(json['createdAt']) : null,
       updatedAt: json['updatedAt'] != null ? DateTime.parse(json['updatedAt']) : null,
       status: json['status'] ?? 'active',
+      isPublished: json['isPublished'] ?? false,
+      isFeatured: json['isFeatured'] ?? false,
+      views: json['views'] ?? 0,
+      applications: List<dynamic>.from(json['applications'] ?? []),
     );
+  }
+
+  // Helper method to parse documents (can be array or comma-separated string)
+  static List<String> _parseDocuments(dynamic documents) {
+    if (documents == null) return [];
+    if (documents is List) {
+      return List<String>.from(documents);
+    }
+    if (documents is String) {
+      return documents.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
+    }
+    return [];
   }
 
   Map<String, dynamic> toJson() {
     return {
       if (id != null) '_id': id,
       'hrPhone': hrPhone,
+      if (hrId != null) 'hrId': hrId,
       'title': title,
       'companyName': companyName,
       'jobCategory': jobCategory,
@@ -93,14 +131,18 @@ class Job {
       'openings': employmentDetails.openings,
       'isWalkInInterview': employmentDetails.isWalkInInterview,
       'workingDays': employmentDetails.workingDays,
-      'additionalPerks': additionalPerks, // Keep as array
-      'documents': documentsRequired.join(', '), // Convert to string
+      'additionalPerks': additionalPerks,
+      'documents': documentsRequired.join(', '),
       'communicationPreference': communicationPreference,
       'jobTiming': jobTiming.toString(),
       'jobDescription': jobDescription,
       if (createdAt != null) 'createdAt': createdAt!.toIso8601String(),
       if (updatedAt != null) 'updatedAt': updatedAt!.toIso8601String(),
       if (status != null) 'status': status,
+      'isPublished': isPublished,
+      'isFeatured': isFeatured,
+      'views': views,
+      'applications': applications,
     };
   }
 
@@ -111,6 +153,9 @@ class Job {
   bool get isActive => status == 'active';
   bool get isPending => status == 'pending';
   bool get isClosed => status == 'closed';
+  bool get isDraft => status == 'draft';
+  int get applicationsCount => applications.length;
+  String get planTypeSummary => planType.isEmpty ? 'No plan' : planType.join(', ');
 }
 
 class SalaryDetails {
@@ -159,6 +204,7 @@ class LocationDetails {
   final String officeAddress;
   final String floorDetails;
   final List<double> coordinates;
+  final Map<String, dynamic>? location; // GeoJSON location object
 
   LocationDetails({
     required this.workLocation,
@@ -167,16 +213,26 @@ class LocationDetails {
     required this.officeAddress,
     required this.floorDetails,
     required this.coordinates,
+    this.location,
   });
 
   factory LocationDetails.fromJson(Map<String, dynamic> json) {
+    // Extract coordinates from either 'coordinates' field or 'location.coordinates'
+    List<double> coords = [0.0, 0.0];
+    if (json['coordinates'] != null) {
+      coords = List<double>.from(json['coordinates']);
+    } else if (json['location'] != null && json['location']['coordinates'] != null) {
+      coords = List<double>.from(json['location']['coordinates']);
+    }
+
     return LocationDetails(
       workLocation: json['workLocation'] ?? '',
       jobLocation: json['jobLocation'] ?? '',
       preferredLocation: json['preferredLocation'] ?? '',
       officeAddress: json['officeAddress'] ?? '',
       floorDetails: json['floorDetails'] ?? '',
-      coordinates: List<double>.from(json['coordinates'] ?? [0.0, 0.0]),
+      coordinates: coords,
+      location: json['location'],
     );
   }
 
@@ -188,6 +244,7 @@ class LocationDetails {
       'officeAddress': officeAddress,
       'floorDetails': floorDetails,
       'coordinates': coordinates,
+      if (location != null) 'location': location,
     };
   }
 
@@ -394,6 +451,7 @@ enum GenderPreference {
 }
 
 enum JobStatus {
+  draft('draft'),
   active('active'),
   pending('pending'),
   closed('closed');

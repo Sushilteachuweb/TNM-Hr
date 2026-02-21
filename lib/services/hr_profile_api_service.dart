@@ -90,6 +90,7 @@ class HrProfileApiService {
 
       print("👤 Request Fields: ${request.fields}");
       print("👤 Request Files: ${request.files.map((f) => f.field).toList()}");
+      print("🔄 SENDING UPDATE REQUEST...");
 
       final streamedResponse = await request.send().timeout(const Duration(seconds: 30));
       final response = await http.Response.fromStream(streamedResponse);
@@ -98,13 +99,35 @@ class HrProfileApiService {
       print("👤 Status Code: ${response.statusCode}");
 
       final data = jsonDecode(response.body);
+      print("📦 UPDATE RESPONSE DATA: $data");
+      print("📦 Response has 'data' key: ${data.containsKey('data')}");
+      if (data.containsKey('data')) {
+        print("📦 Updated profile data: ${data['data']}");
+      }
 
       if (response.statusCode == 200) {
         print("✅ HR Profile updated successfully");
+        
+        // Extract the actual profile data from nested structure
+        // Response structure: {success, message, data: {success, message, data: {actual profile}}}
+        Map<String, dynamic>? updatedProfile;
+        if (data['data'] != null && data['data'] is Map<String, dynamic>) {
+          final innerData = data['data'] as Map<String, dynamic>;
+          if (innerData['data'] != null && innerData['data'] is Map<String, dynamic>) {
+            updatedProfile = innerData['data'] as Map<String, dynamic>;
+            print("✅ Extracted updated profile from nested data.data structure");
+            print("✅ Updated profile fields: ${updatedProfile.keys}");
+          } else {
+            updatedProfile = innerData;
+            print("✅ Using data as updated profile");
+          }
+        }
+        
         return {
           'success': true,
           'message': data['message'] ?? 'Profile updated successfully',
           'data': data,
+          'updatedProfile': updatedProfile, // Include the actual updated profile data
         };
       } else {
         print("❌ Update HR Profile failed: ${data['message']}");
@@ -150,6 +173,7 @@ class HrProfileApiService {
 
       if (response.statusCode == 200) {
         print("✅ HR Profile fetched successfully");
+        print("📥 RAW API RESPONSE: ${response.body}");
         
         // Check if data is wrapped in a 'data' or 'user' key, or if it's an array
         Map<String, dynamic> profileData;
@@ -193,6 +217,16 @@ class HrProfileApiService {
         
         print("👤 Final Profile Data: $profileData");
         print("👤 Profile Data Keys: ${profileData.keys}");
+        print("📋 FETCHED PROFILE FIELDS:");
+        print("   - fullName: ${profileData['fullName']}");
+        print("   - email: ${profileData['email']}");
+        print("   - companyName: ${profileData['companyName']}");
+        print("   - designation: ${profileData['designation']}");
+        print("   - experience: ${profileData['experience']}");
+        print("   - hrLocation: ${profileData['hrLocation']}");
+        print("   - bio: ${profileData['bio']}");
+        print("   - skills: ${profileData['skills']}");
+        print("   - profilePhoto: ${profileData['profilePhoto']}");
         
         return {
           'success': true,

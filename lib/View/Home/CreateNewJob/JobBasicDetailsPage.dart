@@ -1,9 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:google_places_flutter/google_places_flutter.dart';
+import 'package:google_places_flutter/model/prediction.dart';
 import '../../../core/app_colors.dart';
 import '../../../core/app_text_styles.dart';
 import '../../../Provider/job_form_provider.dart';
+import '../../../Provider/hr_profile_provider.dart';
+import '../../../services/user_storage.dart';
+import '../../../data/indian_states_cities.dart';
 import 'JobLocationEmploymentPage.dart';
 
 class JobBasicDetailsPage extends StatefulWidget {
@@ -23,6 +28,13 @@ class _JobBasicDetailsPageState extends State<JobBasicDetailsPage> {
   final _maxAgeController = TextEditingController();
   final _minExpController = TextEditingController();
   final _maxExpController = TextEditingController();
+  final _preferredLocationController = TextEditingController();
+  
+  // Add a unique key for the Google Places widget
+  final _preferredLocationKey = GlobalKey();
+  
+  // Add FocusNode to manage focus
+  final _preferredLocationFocusNode = FocusNode();
 
   // Options based on website screenshots
   final List<String> jobTypes = ["Full Time", "Part Time", "Both (Full + Part Time)"];
@@ -52,9 +64,28 @@ class _JobBasicDetailsPageState extends State<JobBasicDetailsPage> {
   void initState() {
     super.initState();
     final formProvider = Provider.of<JobFormProvider>(context, listen: false);
+    final hrProfileProvider = Provider.of<HrProfileProvider>(context, listen: false);
     
-    // Load job categories from API
-    formProvider.fetchJobCategories();
+    // Load job categories from API after the build is complete
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      formProvider.fetchJobCategories();
+      
+      // Load company name from profile
+      await hrProfileProvider.loadProfileFromLocal();
+      String companyName = hrProfileProvider.companyName;
+      
+      // If not in profile provider, try UserStorage
+      if (companyName.isEmpty) {
+        final userData = await UserStorage.getLoginData();
+        companyName = userData['company'] ?? '';
+      }
+      
+      // Set company name in form provider and controller
+      if (companyName.isNotEmpty) {
+        formProvider.setCompanyName(companyName);
+        _companyNameController.text = companyName;
+      }
+    });
     
     _companyNameController.text = formProvider.companyName;
     _jobTitleController.text = formProvider.jobTitle;
@@ -65,6 +96,7 @@ class _JobBasicDetailsPageState extends State<JobBasicDetailsPage> {
     _maxAgeController.text = formProvider.maxAge.toString();
     _minExpController.text = formProvider.minExperience;
     _maxExpController.text = formProvider.maxExperience;
+    _preferredLocationController.text = formProvider.preferredLocation;
   }
 
   @override
@@ -78,6 +110,8 @@ class _JobBasicDetailsPageState extends State<JobBasicDetailsPage> {
     _maxAgeController.dispose();
     _minExpController.dispose();
     _maxExpController.dispose();
+    _preferredLocationController.dispose();
+    _preferredLocationFocusNode.dispose();
     super.dispose();
   }
 
@@ -203,12 +237,54 @@ class _JobBasicDetailsPageState extends State<JobBasicDetailsPage> {
         ),
         const SizedBox(height: 16),
         
-        // Company Name
-        _buildTextField(
-          controller: _companyNameController,
-          label: "Company Name *",
-          hint: "Enter your company name",
-          onChanged: (value) => formProvider.setCompanyName(value),
+        // Company Name (Read-only, auto-filled from profile)
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              "Company Name *",
+              style: AppTextStyles.subtitle2.copyWith(
+                color: AppColors.textPrimary,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+              decoration: BoxDecoration(
+                color: Colors.grey[100],
+                border: Border.all(color: AppColors.border),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.business, color: Colors.grey[600], size: 20),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      _companyNameController.text.isEmpty 
+                          ? "Loading from profile..." 
+                          : _companyNameController.text,
+                      style: AppTextStyles.body1.copyWith(
+                        color: _companyNameController.text.isEmpty 
+                            ? Colors.grey[500] 
+                            : AppColors.textPrimary,
+                      ),
+                    ),
+                  ),
+                  Icon(Icons.lock_outline, color: Colors.grey[400], size: 18),
+                ],
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              "Company name is auto-filled from your profile",
+              style: AppTextStyles.caption.copyWith(
+                color: AppColors.textSecondary,
+                fontStyle: FontStyle.italic,
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: 16),
         
@@ -556,18 +632,131 @@ class _JobBasicDetailsPageState extends State<JobBasicDetailsPage> {
         ),
         const SizedBox(height: 16),
         
-        // Prefer applications from
-        _buildDropdownWithPlaceholder(
-          label: "Prefer applications from",
-          value: formProvider.preferredLocation.isEmpty ? preferredLocations[0] : formProvider.preferredLocation,
-          items: preferredLocations,
-          placeholderIndex: 0, // "Select preferred location" is at index 0
-          onChanged: (value) {
-            if (value != null && value != preferredLocations[0]) {
-              formProvider.setPreferredLocation(value);
-            }
-          },
+        // Prefer applications from - Google Places Autocomplete
+        Text(
+          "Prefer applications from *",
+          style: AppTextStyles.subtitle2.copyWith(
+            color: AppColors.textPrimary,
+            fontWeight: FontWeight.w600,
+          ),
         ),
+        const SizedBox(height: 8),
+        
+        // Google Places Autocomplete for Location
+        Container(
+          key: _preferredLocationKey,
+          child: GooglePlaceAutoCompleteTextField(
+            textEditingController: _preferredLocationController,
+            focusNode: _preferredLocationFocusNode,
+            googleAPIKey: "AIzaSyAAxbBbwAa5E2Zr8PfLBVQeGNaJSYz6154",
+            boxDecoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppColors.border, width: 1),
+            ),
+            inputDecoration: InputDecoration(
+              hintText: "Search for city or location",
+              hintStyle: AppTextStyles.body2.copyWith(
+                color: AppColors.textSecondary,
+              ),
+              prefixIcon: Icon(Icons.location_on, color: AppColors.primary),
+              border: InputBorder.none,
+              enabledBorder: InputBorder.none,
+              focusedBorder: InputBorder.none,
+              disabledBorder: InputBorder.none,
+              errorBorder: InputBorder.none,
+              focusedErrorBorder: InputBorder.none,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            ),
+            debounceTime: 600,
+            countries: const ["in"], // Restrict to India
+            isLatLngRequired: true,
+            getPlaceDetailWithLatLng: (Prediction prediction) {
+              // Extract city and state from the prediction
+              String fullAddress = prediction.description ?? "";
+              
+              // Parse the address to extract city and state
+              List<String> parts = fullAddress.split(',').map((e) => e.trim()).toList();
+              
+              String city = "";
+              String state = "";
+              
+              if (parts.length >= 3) {
+                // Format: "City, State, Country"
+                city = parts[0];
+                state = parts[1];
+              } else if (parts.length == 2) {
+                // Format: "City, State" or "State, Country"
+                city = parts[0];
+                state = parts[1];
+              } else if (parts.length == 1) {
+                // Only one part, treat as city
+                city = parts[0];
+              }
+              
+              // Update provider with parsed values FIRST
+              formProvider.setPreferredCity(city);
+              formProvider.setPreferredState(state);
+              
+              // Then set the full location (this will use the city and state we just set)
+              formProvider.setPreferredLocation(fullAddress);
+              
+              print("📍 Preferred Location selected: $fullAddress");
+              print("🏙️ City: $city, State: $state");
+              
+              // Get coordinates if available
+              if (prediction.lat != null && prediction.lng != null) {
+                double lat = double.tryParse(prediction.lat ?? "0") ?? 0.0;
+                double lng = double.tryParse(prediction.lng ?? "0") ?? 0.0;
+                print("🌍 Coordinates: [$lat, $lng]");
+                
+                // Store coordinates in provider
+                formProvider.setPreferredCoordinates(lat, lng);
+              }
+            },
+            itemClick: (Prediction prediction) {
+              // Set the value directly without clearing
+              _preferredLocationController.text = prediction.description ?? "";
+              _preferredLocationController.selection = TextSelection.fromPosition(
+                TextPosition(offset: prediction.description?.length ?? 0),
+              );
+              // Unfocus to dismiss keyboard and prevent further input issues
+              _preferredLocationFocusNode.unfocus();
+            },
+            seperatedBuilder: const Divider(),
+            containerHorizontalPadding: 10,
+            itemBuilder: (context, index, Prediction prediction) {
+              return Container(
+                padding: const EdgeInsets.all(10),
+                child: Row(
+                  children: [
+                    Icon(Icons.location_on, color: AppColors.primary),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        prediction.description ?? "",
+                        style: AppTextStyles.body2,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+            isCrossBtnShown: true,
+          ),
+        ),
+        
+        if (formProvider.preferredLocation.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Text(
+              "Selected: ${formProvider.preferredLocation}",
+              style: AppTextStyles.caption.copyWith(
+                color: AppColors.primary,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
         const SizedBox(height: 16),
         
         // Gender
@@ -640,8 +829,10 @@ class _JobBasicDetailsPageState extends State<JobBasicDetailsPage> {
 
   Widget _buildDropdown({
     required String label,
-    required String value,
+    String? value,
     required List<String> items,
+    String? hint,
+    bool enabled = true,
     required Function(String?) onChanged,
   }) {
     return Column(
@@ -657,14 +848,33 @@ class _JobBasicDetailsPageState extends State<JobBasicDetailsPage> {
         const SizedBox(height: 8),
         DropdownButtonFormField<String>(
           value: value,
+          isExpanded: true, // This prevents overflow
           items: items.map((item) {
+            if (item.isEmpty) {
+              return DropdownMenuItem<String>(
+                value: item,
+                enabled: false,
+                child: Text(
+                  hint ?? "Select an option",
+                  style: TextStyle(
+                    color: AppColors.textSecondary.withOpacity(0.6),
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              );
+            }
             return DropdownMenuItem<String>(
               value: item,
-              child: Text(item),
+              child: Text(
+                IndianStatesAndCities.getDisplayName(item),
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
+              ),
             );
           }).toList(),
-          onChanged: onChanged,
+          onChanged: enabled ? onChanged : null,
           decoration: InputDecoration(
+            hintText: hint,
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
               borderSide: BorderSide(color: AppColors.border),
@@ -677,7 +887,13 @@ class _JobBasicDetailsPageState extends State<JobBasicDetailsPage> {
               borderRadius: BorderRadius.circular(12),
               borderSide: BorderSide(color: AppColors.primary, width: 2),
             ),
+            disabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: AppColors.border.withOpacity(0.5)),
+            ),
             contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            filled: !enabled,
+            fillColor: enabled ? null : Colors.grey.shade100,
           ),
         ),
       ],

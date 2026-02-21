@@ -15,7 +15,9 @@ class ApiConfig {
 
   // Job Management endpoints
   static const String createJob = "https://api.thenaukrimitra.com/api/jobs/hr/create";
-  static const String getHrJobs = "$baseUrl/jobs";
+  static String getDraftJobs(String hrId) => "$baseUrl/drafts?hrId=$hrId";
+  static String publishJob(String jobId) => "https://api.thenaukrimitra.com/api/jobs/$jobId/publish";
+  static String getHrJobs(String hrId) => "$baseUrl/jobs?hrId=$hrId";
   static String updateJob(String jobId) => "$baseUrl/update-job?jobId=$jobId";
   static String deleteJob(String jobId) => "$baseUrl/delete-job?jobId=$jobId";
   

@@ -31,36 +31,67 @@ class JobProvider with ChangeNotifier {
     notifyListeners();
 
     try {
-      final result = await JobApiService.getHrJobs();
-      print("📊 Provider received result: ${result['success']}");
+      // Fetch both regular jobs and draft jobs
+      final results = await Future.wait([
+        JobApiService.getHrJobs(),
+        JobApiService.getDraftJobs(),
+      ]);
+      
+      final regularJobsResult = results[0];
+      final draftJobsResult = results[1];
+      
+      print("📊 Provider received regular jobs result: ${regularJobsResult['success']}");
+      print("📊 Provider received draft jobs result: ${draftJobsResult['success']}");
 
-      if (result['success'] == true) {
-        // Handle different response structures
-        if (result['data'] is List) {
-          _jobs = result['data'];
-          print("📊 Jobs extracted from List: ${_jobs.length} jobs");
-        } else if (result['data'] is Map && result['data']['jobs'] != null) {
-          _jobs = result['data']['jobs'];
-          print("📊 Jobs extracted from Map: ${_jobs.length} jobs");
-        } else if (result['data'] is Map && result['data']['data'] != null && result['data']['data']['jobs'] != null) {
-          _jobs = result['data']['data']['jobs'];
-          print("📊 Jobs extracted from nested data: ${_jobs.length} jobs");
+      List<dynamic> regularJobs = [];
+      List<dynamic> draftJobs = [];
+
+      // Extract regular jobs
+      if (regularJobsResult['success'] == true) {
+        if (regularJobsResult['data'] is List) {
+          regularJobs = regularJobsResult['data'];
+          print("📊 Regular jobs extracted from List: ${regularJobs.length} jobs");
+        } else if (regularJobsResult['data'] is Map && regularJobsResult['data']['jobs'] != null) {
+          regularJobs = regularJobsResult['data']['jobs'];
+          print("📊 Regular jobs extracted from Map: ${regularJobs.length} jobs");
+        } else if (regularJobsResult['data'] is Map && regularJobsResult['data']['data'] != null && regularJobsResult['data']['data']['jobs'] != null) {
+          regularJobs = regularJobsResult['data']['data']['jobs'];
+          print("📊 Regular jobs extracted from nested data: ${regularJobs.length} jobs");
         } else {
-          _jobs = [];
-          print("📊 No jobs found in response structure");
-          print("📊 Result data type: ${result['data'].runtimeType}");
-          print("📊 Result data: ${result['data']}");
+          print("📊 No regular jobs found in response structure");
+          print("📊 Result data type: ${regularJobsResult['data'].runtimeType}");
+          print("📊 Result data: ${regularJobsResult['data']}");
         }
-        _updateJobCounts();
-        _hasLoadedOnce = true; // Mark as loaded
-        print("📊 Final jobs count: ${_jobs.length}");
-      } else {
-        _errorMessage = result['message'] ?? 'Failed to fetch jobs';
-        _jobs = [];
-        print("📊 API returned success=false");
-        // Set hasLoadedOnce to true even when API returns success=false to prevent infinite skeleton
-        _hasLoadedOnce = true;
       }
+
+      // Extract draft jobs
+      if (draftJobsResult['success'] == true) {
+        if (draftJobsResult['data'] is List) {
+          draftJobs = draftJobsResult['data'];
+          print("📊 Draft jobs extracted from List: ${draftJobs.length} jobs");
+        } else if (draftJobsResult['data'] is Map && draftJobsResult['data']['jobs'] != null) {
+          draftJobs = draftJobsResult['data']['jobs'];
+          print("📊 Draft jobs extracted from Map: ${draftJobs.length} jobs");
+        } else if (draftJobsResult['data'] is Map && draftJobsResult['data']['data'] != null && draftJobsResult['data']['data']['jobs'] != null) {
+          draftJobs = draftJobsResult['data']['data']['jobs'];
+          print("📊 Draft jobs extracted from nested data: ${draftJobs.length} jobs");
+        } else {
+          print("📊 No draft jobs found in response structure");
+          print("📊 Result data type: ${draftJobsResult['data'].runtimeType}");
+          print("📊 Result data: ${draftJobsResult['data']}");
+        }
+      }
+
+      // Merge regular jobs and draft jobs
+      _jobs = [...draftJobs, ...regularJobs];
+      print("📊 Total jobs (draft + regular): ${_jobs.length}");
+      
+      // Update applicant counts for each job
+      await _updateApplicantCounts();
+      
+      _updateJobCounts();
+      _hasLoadedOnce = true; // Mark as loaded
+      print("📊 Final jobs count: ${_jobs.length}");
     } catch (e) {
       print("❌ Error in fetchJobs: $e");
       _errorMessage = 'Failed to fetch jobs';
@@ -73,7 +104,7 @@ class JobProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  /// Create new job with full details
+  /// Create new job with full details (saves as draft)
   Future<bool> createJob({
     required String hrPhone,
     required String title,
@@ -144,13 +175,6 @@ class JobProvider with ChangeNotifier {
     print("💼 Create Job Result: $result");
 
     if (result['success'] == true) {
-      // Check if payment is required
-      if (result['data'] != null && result['data']['paymentRequired'] == true) {
-        _errorMessage = 'Payment required for premium job posting';
-        notifyListeners();
-        return false;
-      }
-      
       await fetchJobs(forceRefresh: true); // Force refresh to get updated list
       notifyListeners();
       return true;
@@ -158,6 +182,33 @@ class JobProvider with ChangeNotifier {
       _errorMessage = result['message'] ?? 'Failed to create job';
       notifyListeners();
       return false;
+    }
+  }
+
+  /// Publish a draft job - checks credits and publishes
+  Future<Map<String, dynamic>> publishJob(String jobId) async {
+    _isLoading = true;
+    _errorMessage = '';
+    notifyListeners();
+
+    final result = await JobApiService.publishJob(jobId);
+
+    _isLoading = false;
+
+    if (result['success'] == true) {
+      await fetchJobs(forceRefresh: true); // Refresh list to show updated status
+      notifyListeners();
+      return {
+        'success': true,
+        'message': result['message'] ?? 'Job published successfully',
+      };
+    } else {
+      _errorMessage = result['message'] ?? 'Failed to publish job';
+      notifyListeners();
+      return {
+        'success': false,
+        'message': _errorMessage,
+      };
     }
   }
 
@@ -205,7 +256,7 @@ class JobProvider with ChangeNotifier {
     _isLoading = false;
 
     if (result['success'] == true) {
-      await fetchJobs(); // Refresh list
+      await fetchJobs(forceRefresh: true); // Force refresh to get updated list
       notifyListeners();
       return true;
     } else {
@@ -224,6 +275,45 @@ class JobProvider with ChangeNotifier {
     };
   }
 
+  /// Update applicant counts for all jobs by fetching actual applicant data
+  Future<void> _updateApplicantCounts() async {
+    print("📊 Updating applicant counts for ${_jobs.length} jobs");
+    
+    for (int i = 0; i < _jobs.length; i++) {
+      final job = _jobs[i];
+      final jobId = job['_id']?.toString() ?? job['id']?.toString();
+      
+      if (jobId != null && jobId.isNotEmpty) {
+        try {
+          print("📊 Fetching applicants for job: $jobId");
+          final result = await JobApiService.getAppliedUsers(jobId);
+          
+          if (result['success'] == true) {
+            List<dynamic> applicants = result['data']['applicants'] ?? [];
+            int actualCount = applicants.length;
+            
+            // Update the job's applicant count
+            _jobs[i]['applicantsCount'] = actualCount;
+            print("📊 Updated job $jobId applicant count: $actualCount");
+          } else {
+            print("📊 Failed to fetch applicants for job $jobId: ${result['message']}");
+            // Keep existing count or set to 0 if not present
+            _jobs[i]['applicantsCount'] = _jobs[i]['applicantsCount'] ?? 0;
+          }
+        } catch (e) {
+          print("❌ Error fetching applicants for job $jobId: $e");
+          // Keep existing count or set to 0 if not present
+          _jobs[i]['applicantsCount'] = _jobs[i]['applicantsCount'] ?? 0;
+        }
+      } else {
+        print("📊 Job missing ID, skipping applicant count update");
+        _jobs[i]['applicantsCount'] = 0;
+      }
+    }
+    
+    print("📊 Finished updating applicant counts");
+  }
+
   /// Filter jobs by status
   List<dynamic> getJobsByStatus(String status) {
     // If no status filter is needed, return all jobs
@@ -235,6 +325,52 @@ class JobProvider with ChangeNotifier {
       final jobStatus = job['status']?.toString().toLowerCase() ?? 'active';
       return jobStatus == status.toLowerCase();
     }).toList();
+  }
+
+  /// Get draft jobs
+  List<dynamic> getDraftJobs() {
+    return _jobs.where((job) {
+      final status = job['status']?.toString().toLowerCase() ?? '';
+      return status == 'draft';
+    }).toList();
+  }
+
+  /// Get published jobs (active, pending, closed)
+  List<dynamic> getPublishedJobs() {
+    return _jobs.where((job) {
+      final status = job['status']?.toString().toLowerCase() ?? '';
+      return status != 'draft';
+    }).toList();
+  }
+
+  /// Update applicant count for a specific job
+  Future<void> updateJobApplicantCount(String jobId) async {
+    try {
+      print("📊 Updating applicant count for job: $jobId");
+      final result = await JobApiService.getAppliedUsers(jobId);
+      
+      if (result['success'] == true) {
+        List<dynamic> applicants = result['data']['applicants'] ?? [];
+        int actualCount = applicants.length;
+        
+        // Find and update the specific job
+        for (int i = 0; i < _jobs.length; i++) {
+          final job = _jobs[i];
+          final currentJobId = job['_id']?.toString() ?? job['id']?.toString();
+          
+          if (currentJobId == jobId) {
+            _jobs[i]['applicantsCount'] = actualCount;
+            print("📊 Updated job $jobId applicant count: $actualCount");
+            notifyListeners();
+            break;
+          }
+        }
+      } else {
+        print("📊 Failed to fetch applicants for job $jobId: ${result['message']}");
+      }
+    } catch (e) {
+      print("❌ Error updating applicant count for job $jobId: $e");
+    }
   }
 
   /// Get total count of unique candidates who applied to HR's jobs
@@ -271,6 +407,13 @@ class JobProvider with ChangeNotifier {
     }
     
     return uniqueCandidates.length;
+  }
+
+  /// Refresh applicant counts for all jobs
+  Future<void> refreshApplicantCounts() async {
+    print("📊 Manually refreshing applicant counts");
+    await _updateApplicantCounts();
+    notifyListeners();
   }
 
   /// Clear all data (e.g., on logout)

@@ -96,7 +96,8 @@ class UnifiedBillingProvider with ChangeNotifier {
         print("❌ Failed to load active plan: $_activePlanError");
       }
     } catch (e) {
-      _activePlanError = 'Network error: $e';
+      print("💥 Error loading active plan: $e");
+      _activePlanError = 'Unable to load plan information. Please try again.';
       _activePlan = null;
       print("💥 Error loading active plan: $e");
     } finally {
@@ -141,7 +142,8 @@ class UnifiedBillingProvider with ChangeNotifier {
         print("❌ Failed to load payment history: $_paymentHistoryError");
       }
     } catch (e) {
-      _paymentHistoryError = 'Network error: $e';
+      print("💥 Error loading payment history: $e");
+      _paymentHistoryError = 'Unable to load payment history. Please check your connection and try again.';
       _paymentHistory = [];
       _totalPayments = 0;
       print("💥 Error loading payment history: $e");

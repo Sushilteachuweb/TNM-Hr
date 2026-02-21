@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:naukri_hr_app/View/Home/HomeScreen.dart';
 import 'package:naukri_hr_app/View/Jobs/job_Screen.dart';
 import 'package:naukri_hr_app/View/Plans/plans_screen.dart';
@@ -9,6 +10,7 @@ import '../../core/app_colors.dart';
 import '../../core/app_text_styles.dart';
 import '../../services/user_storage.dart';
 import '../../Widgets/back_button_handler.dart';
+import '../../Provider/hr_profile_provider.dart';
 
 class BottomNavBar extends StatefulWidget {
   final int initialIndex;
@@ -29,7 +31,10 @@ class _BottomNavBarState extends State<BottomNavBar> {
   DateTime? _lastBackPressed;
   
   // Create screens once and preserve their state
-  late final List<Widget> _screens;
+  late List<Widget> _screens;
+  
+  // Key to force ProfileScreen rebuild when needed
+  Key _profileScreenKey = UniqueKey();
 
   @override
   void initState() {
@@ -42,7 +47,7 @@ class _BottomNavBarState extends State<BottomNavBar> {
       const JobScreen(),
       const PlansScreen(),
       const HelpScreen(),
-      const ProfileScreen(),
+      ProfileScreen(key: _profileScreenKey),
     ];
 
     // Show profile completion snackbar for new users
@@ -152,6 +157,20 @@ class _BottomNavBarState extends State<BottomNavBar> {
 
       // If profile was updated, you might want to refresh data or show a success message
       if (result == true) {
+        print("✅ Profile completed from popup, refreshing app data...");
+        
+        // Refresh HR profile provider to get latest data
+        try {
+          final hrProfileProvider = Provider.of<HrProfileProvider>(context, listen: false);
+          final hrId = await UserStorage.getHrId();
+          if (hrId != null && hrId.isNotEmpty) {
+            await hrProfileProvider.fetchProfile(hrId);
+            print("✅ HR profile refreshed after completion");
+          }
+        } catch (e) {
+          print("⚠️ Error refreshing profile: $e");
+        }
+        
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Profile updated successfully!'),
@@ -163,6 +182,12 @@ class _BottomNavBarState extends State<BottomNavBar> {
             margin: const EdgeInsets.all(16),
           ),
         );
+        
+        // Force ProfileScreen to rebuild by changing its key
+        setState(() {
+          _profileScreenKey = UniqueKey();
+          _screens[4] = ProfileScreen(key: _profileScreenKey);
+        });
       }
     } catch (e) {
       print('Error navigating to edit profile: $e');

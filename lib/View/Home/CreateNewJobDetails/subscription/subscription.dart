@@ -1,20 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:razorpay_flutter/razorpay_flutter.dart';
 import 'package:provider/provider.dart';
 import '../../../../core/app_colors.dart';
 import '../../../../core/app_text_styles.dart';
-import '../../../../Provider/plan_provider.dart';
-import '../../../../Provider/billing_provider.dart';
-import '../../../../Provider/credit_provider.dart';
-import '../../../../Provider/active_plan_provider.dart';
-import '../../../../Provider/unified_billing_provider.dart';
-import '../../../../models/job_plan_model.dart';
-import '../../../../services/plan_api_service.dart';
-import '../../../../services/payment_verification_service.dart';
-import '../../../../services/user_storage.dart';
 import '../../../../services/job_creation_service.dart';
 import '../../../bottomNavBar/bottomNavBar.dart';
-import '../../../../widgets/skeleton_components.dart';
 
 class Subscription extends StatefulWidget {
   final Map<String, dynamic> jobData;
@@ -26,685 +15,123 @@ class Subscription extends StatefulWidget {
 }
 
 class _SubscriptionState extends State<Subscription> {
-  late Razorpay _razorpay;
-
   @override
   void initState() {
     super.initState();
-    _razorpay = Razorpay();
-    _razorpay.on(Razorpay.EVENT_PAYMENT_SUCCESS, _handlePaymentSuccess);
-    _razorpay.on(Razorpay.EVENT_PAYMENT_ERROR, _handlePaymentError);
-    _razorpay.on(Razorpay.EVENT_EXTERNAL_WALLET, _handleExternalWallet);
     
-    // Check if user already has credits when screen loads
+    // Create job as draft when screen loads
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _checkCreditsAndProceed();
+      _createJobAsDraft();
     });
   }
 
-  /// Check if user has credits and create job directly if they do
-  Future<void> _checkCreditsAndProceed() async {
-    final unifiedBillingProvider = Provider.of<UnifiedBillingProvider>(context, listen: false);
-    final planProvider = Provider.of<PlanProvider>(context, listen: false);
+  /// Create job as draft
+  Future<void> _createJobAsDraft() async {
+    print("📝 Creating job as draft");
     
-    // Fetch latest credit data
-    await unifiedBillingProvider.fetchAllData();
-    final remainingCredits = unifiedBillingProvider.remainingCredits;
-    
-    print("💳 Subscription screen - Remaining credits: $remainingCredits");
-    
-    if (remainingCredits > 0) {
-      // User has credits - create job directly without showing plan selection
-      print("✅ User has credits, creating job directly from subscription screen");
-      
-      // Show loading indicator
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (dialogContext) => const Center(
-          child: CircularProgressIndicator(),
-        ),
-      );
-      
-      try {
-        // Create job with credit deduction
-        final success = await JobCreationService.createJobWithCreditDeduction(
-          context: context,
-          jobData: widget.jobData,
-        );
-        
-        // Remove loading indicator first
-        if (mounted && Navigator.canPop(context)) {
-          Navigator.of(context).pop(); // Remove loading dialog
-        }
-        
-        if (success) {
-          // Navigate to home screen after successful job creation
-          if (mounted) {
-            Navigator.of(context).pushAndRemoveUntil(
-              MaterialPageRoute(
-                builder: (context) => const BottomNavBar(initialIndex: 1),
-              ),
-              (Route<dynamic> route) => false,
-            );
-          }
-        } else {
-          // If job creation failed, show the plan selection screen as fallback
-          print("❌ Job creation failed, showing plan selection as fallback");
-          planProvider.fetchPlans();
-        }
-      } catch (e) {
-        // Remove loading indicator on error
-        if (mounted && Navigator.canPop(context)) {
-          Navigator.of(context).pop(); // Remove loading dialog
-        }
-        
-        print("❌ Job creation failed with error: $e, showing plan selection as fallback");
-        planProvider.fetchPlans();
-      }
-    } else {
-      // No credits - show plan selection
-      print("❌ No credits available, showing plan selection");
-      planProvider.fetchPlans();
-    }
-  }
-
-  void _handlePaymentSuccess(PaymentSuccessResponse response) async {
-    final planProvider = Provider.of<PlanProvider>(context, listen: false);
-    final billingProvider = Provider.of<BillingProvider>(context, listen: false);
-    final creditProvider = Provider.of<CreditProvider>(context, listen: false);
+    // Show loading indicator
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => const Center(
+        child: CircularProgressIndicator(),
+      ),
+    );
     
     try {
-      // Get mobile number for verification (same as used in payment creation)
-      final userData = await UserStorage.getLoginData();
-      final mobileNumber = userData['phone']?.toString();
-      
-      if (mobileNumber == null || mobileNumber.isEmpty) {
-        throw Exception('Mobile number not found for payment verification');
-      }
-      
-      // Verify payment with backend
-      print("🔍 Starting payment verification...");
-      final verificationResult = await PaymentVerificationService.verifyPayment(
-        orderId: response.orderId ?? '',
-        paymentId: response.paymentId ?? '',
-        signature: response.signature ?? '',
-        planId: planProvider.selectedPlan?.id ?? '',
-        userId: mobileNumber, // Using mobile number as userId (as per API requirement)
-        amount: planProvider.selectedPlan?.pricePerMonth ?? 0,
+      // Create job as draft (no credit check needed)
+      final jobId = await JobCreationService.createJobAsDraft(
+        context: context,
+        jobData: widget.jobData,
       );
       
-      if (verificationResult['success'] == true) {
-        print("✅ Payment verification successful");
+      // Remove loading indicator
+      if (mounted && Navigator.canPop(context)) {
+        Navigator.of(context).pop(); // Remove loading dialog
+      }
+      
+      if (jobId != null) {
+        // Job created as draft successfully
+        print("✅ Job created as draft with ID: $jobId");
         
-        // Update billing record status to success
-        if (planProvider.selectedPlan != null) {
-          await billingProvider.updateBillingRecordStatus(
-            orderId: response.orderId ?? '',
-            status: 'Success',
-            paymentId: response.paymentId,
+        // Show success message and navigate to jobs screen
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text('Job saved as draft successfully! You can publish it from the Jobs screen.'),
+              backgroundColor: AppColors.success,
+              duration: const Duration(seconds: 3),
+            ),
           );
           
-          // Add credits from the purchased plan
-          await creditProvider.addCreditsFromPlan(
-            planProvider.selectedPlan!.id,
-            planProvider.selectedPlan!.planName,
+          // Navigate to jobs screen where user can publish the draft
+          Navigator.of(context).pushAndRemoveUntil(
+            MaterialPageRoute(
+              builder: (context) => const BottomNavBar(initialIndex: 1),
+            ),
+            (Route<dynamic> route) => false,
           );
         }
-        
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Payment Successful: ${response.paymentId}'),
-            backgroundColor: AppColors.success,
-          ),
-        );
-
-        // Refresh active plan data after successful payment
-        try {
-          final activePlanProvider = Provider.of<ActivePlanProvider>(context, listen: false);
-          final unifiedBillingProvider = Provider.of<UnifiedBillingProvider>(context, listen: false);
-          
-          // Refresh both active plan providers to show updated plan status
-          await Future.wait([
-            activePlanProvider.fetchActivePlan(forceRefresh: true),
-            unifiedBillingProvider.fetchAllData(forceRefresh: true),
-            creditProvider.calculateAvailableCredits(forceRefresh: true), // Also refresh credits to show updated balance
-          ]);
-          
-          print("✅ Active plan data and credits refreshed after payment");
-        } catch (e) {
-          print("⚠️ Failed to refresh active plan data: $e");
-        }
-
-        // Call create job API after successful payment with selected plan
-        await _createJobAfterPayment(planProvider.selectedPlan);
       } else {
-        print("❌ Payment verification failed: ${verificationResult['message']}");
-        throw Exception(verificationResult['message'] ?? 'Payment verification failed');
+        // Job creation failed
+        print("❌ Failed to create job as draft");
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text('Failed to create job. Please try again.'),
+              backgroundColor: AppColors.error,
+            ),
+          );
+          // Go back to previous screen
+          Navigator.of(context).pop();
+        }
       }
     } catch (e) {
-      print("💥 Payment verification error: $e");
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Payment verification failed: $e'),
-          backgroundColor: AppColors.error,
-        ),
-      );
-    }
-  }
-
-  void _handlePaymentError(PaymentFailureResponse response) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Payment Failed: ${response.message}'),
-        backgroundColor: AppColors.error,
-      ),
-    );
-  }
-
-  void _handleExternalWallet(ExternalWalletResponse response) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('External Wallet: ${response.walletName}'),
-        backgroundColor: AppColors.info,
-      ),
-    );
-  }
-
-  Future<void> _createJobAfterPayment(JobPlan? selectedPlan) async {
-    // Use the shared job creation service
-    final success = await JobCreationService.createJobWithCreditDeduction(
-      context: context,
-      jobData: widget.jobData,
-      selectedPlan: selectedPlan,
-    );
-    
-    if (success) {
-      // Navigate to home screen after successful job creation
+      // Remove loading indicator on error
+      if (mounted && Navigator.canPop(context)) {
+        Navigator.of(context).pop(); // Remove loading dialog
+      }
+      
+      print("❌ Job creation failed with error: $e");
       if (mounted) {
-        Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(
-            builder: (context) => const BottomNavBar(initialIndex: 1),
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Failed to create job. Please try again.'),
+            backgroundColor: AppColors.error,
           ),
-          (Route<dynamic> route) => false,
         );
+        // Go back to previous screen
+        Navigator.of(context).pop();
       }
     }
-  }
-
-  @override
-  void dispose() {
-    _razorpay.clear();
-    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.background,
-        elevation: 0,
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back_ios, color: AppColors.textPrimary),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Text(
-          "Select a Plan",
-          style: AppTextStyles.h4.copyWith(
-            color: AppColors.textPrimary,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        centerTitle: false,
-        actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 16),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(
-                color: AppColors.surface,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppColors.border),
-                boxShadow: [AppColors.cardShadow],
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(2),
-                    decoration: BoxDecoration(
-                      color: AppColors.accent,
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(
-                      Icons.circle,
-                      color: AppColors.accentLight,
-                      size: 14,
-                    ),
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    "100",
-                    style: AppTextStyles.body2.copyWith(
-                      color: AppColors.textPrimary,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ],
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const CircularProgressIndicator(),
+            const SizedBox(height: 24),
+            Text(
+              'Creating your job...',
+              style: AppTextStyles.h4.copyWith(
+                color: AppColors.textPrimary,
               ),
             ),
-          ),
-        ],
-      ),
-      body: Consumer<PlanProvider>(
-        builder: (context, planProvider, child) {
-          if (planProvider.isLoading) {
-            return const PlansScreenSkeleton();
-          }
-
-          if (planProvider.errorMessage.isNotEmpty) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.error_outline,
-                    size: 64,
-                    color: AppColors.error,
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Failed to load plans',
-                    style: AppTextStyles.h4.copyWith(
-                      color: AppColors.textPrimary,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    planProvider.errorMessage,
-                    style: AppTextStyles.body2.copyWith(
-                      color: AppColors.textSecondary,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 24),
-                  ElevatedButton(
-                    onPressed: () => planProvider.fetchPlans(),
-                    child: const Text('Retry'),
-                  ),
-                ],
-              ),
-            );
-          }
-
-          if (planProvider.plans.isEmpty) {
-            return const Center(
-              child: Text('No plans available'),
-            );
-          }
-
-          return ListView(
-            padding: const EdgeInsets.fromLTRB(20, 20, 20, 100),
-            children: [
-              _buildHeader(),
-              const SizedBox(height: 24),
-              ...planProvider.plans.map((plan) => Padding(
-                padding: const EdgeInsets.only(bottom: 16),
-                child: _buildPlanCard(plan),
-              )).toList(),
-            ],
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _buildHeader() {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        gradient: AppColors.primaryGradient,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [AppColors.buttonShadow],
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.2),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(Icons.stars_rounded, color: Colors.white, size: 24),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  "Choose Your Plan",
-                  style: AppTextStyles.h4.copyWith(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  "Unlock premium features",
-                  style: AppTextStyles.body2.copyWith(
-                    color: Colors.white.withOpacity(0.9),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPlanCard(JobPlan plan) {
-    final planProvider = Provider.of<PlanProvider>(context, listen: false);
-    final isSelected = planProvider.selectedPlan?.id == plan.id;
-    
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: isSelected ? AppColors.primary : AppColors.border,
-          width: isSelected ? 2 : 1,
-        ),
-        boxShadow: [AppColors.cardShadow],
-      ),
-      child: Column(
-        children: [
-          // Plan Header
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(colors: plan.gradientColors),
-              borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(16),
-                topRight: Radius.circular(16),
+            const SizedBox(height: 8),
+            Text(
+              'Please wait',
+              style: AppTextStyles.body2.copyWith(
+                color: AppColors.textSecondary,
               ),
             ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Text(
-                            plan.planName,
-                            style: AppTextStyles.h4.copyWith(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          if (plan.isRecommended) ...[
-                            const SizedBox(width: 8),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 4,
-                              ),
-                              decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.2),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Text(
-                                "RECOMMENDED",
-                                style: AppTextStyles.caption.copyWith(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        plan.validityText,
-                        style: AppTextStyles.body2.copyWith(
-                          color: Colors.white.withOpacity(0.9),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                if (plan.discountPercent > 0)
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(
-                      "${plan.discountPercent}% OFF",
-                      style: AppTextStyles.caption.copyWith(
-                        color: plan.gradientColors.first,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-          
-          // Plan Details
-          Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              children: [
-                // Features
-                _buildFeatureRow(Icons.work_outline, plan.creditsText),
-                const SizedBox(height: 12),
-                _buildFeatureRow(Icons.schedule_outlined, plan.jobActiveText),
-                const SizedBox(height: 12),
-                _buildFeatureRow(Icons.access_time, "Use Credits in ${plan.validityDays} Days"),
-                const SizedBox(height: 12),
-                _buildFeatureRow(Icons.filter_alt_outlined, plan.filtersText),
-                if (plan.aiMatching) ...[
-                  const SizedBox(height: 12),
-                  _buildFeatureRow(Icons.psychology_outlined, "AI Matching"),
-                ],
-                if (plan.whatsappLead) ...[
-                  const SizedBox(height: 12),
-                  _buildFeatureRow(Icons.message_outlined, "WhatsApp Leads"),
-                ],
-                
-                const SizedBox(height: 20),
-                
-                // Pricing
-                Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Text(
-                                plan.formattedPrice,
-                                style: AppTextStyles.h3.copyWith(
-                                  color: AppColors.textPrimary,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              if (plan.originalPrice > plan.pricePerMonth)
-                                Text(
-                                  plan.formattedOriginalPrice,
-                                  style: AppTextStyles.body2.copyWith(
-                                    color: AppColors.textSecondary,
-                                    decoration: TextDecoration.lineThrough,
-                                  ),
-                                ),
-                            ],
-                          ),
-                          Text(
-                            plan.description,
-                            style: AppTextStyles.caption.copyWith(
-                              color: AppColors.textSecondary,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    ElevatedButton(
-                      onPressed: () => _selectPlanAndProceed(plan),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: isSelected ? AppColors.primary : AppColors.primary,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 24,
-                          vertical: 12,
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      child: Text(
-                        isSelected ? "Selected" : "Select Plan",
-                        style: AppTextStyles.button,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
-  }
-
-  Widget _buildFeatureRow(IconData icon, String text) {
-    return Row(
-      children: [
-        Icon(
-          icon,
-          size: 20,
-          color: AppColors.primary,
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Text(
-            text,
-            style: AppTextStyles.body2.copyWith(
-              color: AppColors.textPrimary,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  void _selectPlanAndProceed(JobPlan plan) {
-    final planProvider = Provider.of<PlanProvider>(context, listen: false);
-    planProvider.selectPlan(plan);
-    
-    // Proceed with payment using new API
-    _startPayment(plan);
-  }
-
-  Future<void> _startPayment(JobPlan plan) async {
-    try {
-      final billingProvider = Provider.of<BillingProvider>(context, listen: false);
-      
-      // Get mobile number to use as userId (as per API requirement)
-      final userData = await UserStorage.getLoginData();
-      final mobileNumber = userData['phone']?.toString();
-      
-      if (mobileNumber == null || mobileNumber.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('Mobile number not found. Please login again.'),
-            backgroundColor: AppColors.error,
-          ),
-        );
-        return;
-      }
-      
-      print("📱 Using mobile number as userId for payment: $mobileNumber");
-      
-      // Create order using the new buy plan API
-      final orderResponse = await PlanApiService.buyPlan(
-        planId: plan.id,
-        userId: mobileNumber, // Using mobile number as userId (as per API requirement)
-        amount: plan.pricePerMonth,
-      );
-
-      if (orderResponse['success'] == true && orderResponse['order'] != null) {
-        final order = orderResponse['order'];
-        
-        // Add billing record as pending
-        await billingProvider.addBillingRecord(
-          planName: plan.planName,
-          planId: plan.id,
-          amount: plan.pricePerMonth,
-          status: 'Pending',
-          paymentId: '',
-          orderId: order['id'],
-          expiresOn: _calculateExpiryDate(plan.validityDays),
-        );
-        
-        // Start Razorpay payment with the order details
-        var options = {
-          'key': 'rzp_test_RSsp7FsCxepW8t',
-          'amount': order['amount'], // Amount in paise from API response
-          'name': 'Naukri Mitra',
-          'description': '${plan.planName} - ${plan.description}',
-          'order_id': order['id'], // Use order ID from API
-          'prefill': {
-            'contact': widget.jobData['hrPhone'] ?? '',
-            'email': 'hr@example.com'
-          },
-          'external': {
-            'wallets': ['paytm']
-          },
-          'theme': {
-            'color': '#2563EB'
-          }
-        };
-
-        _razorpay.open(options);
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(orderResponse['message'] ?? 'Unable to create order. Please try again.'),
-            backgroundColor: AppColors.error,
-          ),
-        );
-      }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Unable to process payment. Please try again.'),
-          backgroundColor: AppColors.error,
-          action: SnackBarAction(
-            label: 'Retry',
-            textColor: Colors.white,
-            onPressed: () {
-              // Retry payment
-            },
-          ),
-        ),
-      );
-    }
-  }
-
-  String _calculateExpiryDate(int validityDays) {
-    final expiryDate = DateTime.now().add(Duration(days: validityDays));
-    return '${expiryDate.day.toString().padLeft(2, '0')}/${expiryDate.month.toString().padLeft(2, '0')}/${expiryDate.year.toString().substring(2)}';
   }
 }

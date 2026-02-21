@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:google_places_flutter/google_places_flutter.dart';
+import 'package:google_places_flutter/model/prediction.dart';
 import '../../../core/app_colors.dart';
 import '../../../core/app_text_styles.dart';
 import '../../../Provider/job_form_provider.dart';
@@ -22,6 +24,12 @@ class _JobLocationEmploymentPageState extends State<JobLocationEmploymentPage> {
   final _officeAddressController = TextEditingController();
   final _totalOpeningsController = TextEditingController();
   final _jobTimingController = TextEditingController();
+  
+  // Add a unique key for the Google Places widget
+  final _officeAddressKey = GlobalKey();
+  
+  // Add FocusNode to manage focus
+  final _officeAddressFocusNode = FocusNode();
 
   // Options based on website screenshots
   final List<String> workLocationTypes = [
@@ -86,6 +94,7 @@ class _JobLocationEmploymentPageState extends State<JobLocationEmploymentPage> {
     _officeAddressController.dispose();
     _totalOpeningsController.dispose();
     _jobTimingController.dispose();
+    _officeAddressFocusNode.dispose();
     super.dispose();
   }
 
@@ -316,13 +325,81 @@ class _JobLocationEmploymentPageState extends State<JobLocationEmploymentPage> {
         ),
         const SizedBox(height: 16),
         
-        // Office Address
-        _buildTextField(
-          controller: _officeAddressController,
-          label: "Office Address *",
-          hint: "Vsg Fitness, Rue de Paris, Villenave-Saint-Georges, France",
-          maxLines: 2,
-          onChanged: (value) => formProvider.setOfficeAddress(value),
+        // Office Address - Google Places Autocomplete
+        Text(
+          "Office Address *",
+          style: AppTextStyles.subtitle2.copyWith(
+            color: AppColors.textPrimary,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          key: _officeAddressKey,
+          child: GooglePlaceAutoCompleteTextField(
+            textEditingController: _officeAddressController,
+            focusNode: _officeAddressFocusNode,
+            googleAPIKey: "AIzaSyAAxbBbwAa5E2Zr8PfLBVQeGNaJSYz6154",
+            boxDecoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppColors.border, width: 1),
+            ),
+            inputDecoration: InputDecoration(
+              hintText: "Search for office address",
+              hintStyle: AppTextStyles.body2.copyWith(
+                color: AppColors.textSecondary,
+              ),
+              prefixIcon: Icon(Icons.business, color: AppColors.primary),
+              border: InputBorder.none,
+              enabledBorder: InputBorder.none,
+              focusedBorder: InputBorder.none,
+              disabledBorder: InputBorder.none,
+              errorBorder: InputBorder.none,
+              focusedErrorBorder: InputBorder.none,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            ),
+            debounceTime: 600,
+            countries: const ["in"], // Restrict to India
+            isLatLngRequired: true,
+            getPlaceDetailWithLatLng: (Prediction prediction) {
+              String fullAddress = prediction.description ?? "";
+              formProvider.setOfficeAddress(fullAddress);
+              print("🏢 Office address selected: $fullAddress");
+            },
+            itemClick: (Prediction prediction) {
+              // Set the value directly without clearing
+              _officeAddressController.text = prediction.description ?? "";
+              _officeAddressController.selection = TextSelection.fromPosition(
+                TextPosition(offset: prediction.description?.length ?? 0),
+              );
+              // Unfocus to dismiss keyboard and prevent further input issues
+              _officeAddressFocusNode.unfocus();
+            },
+            seperatedBuilder: const Divider(),
+            containerHorizontalPadding: 10,
+            itemBuilder: (context, index, Prediction prediction) {
+              return Container(
+                padding: const EdgeInsets.all(10),
+                child: Row(
+                  children: [
+                    Icon(Icons.business, color: AppColors.primary),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        prediction.description ?? "",
+                        style: AppTextStyles.body2,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+            isCrossBtnShown: true,
+          ),
         ),
         const SizedBox(height: 8),
         Text(
@@ -679,77 +756,81 @@ class _JobLocationEmploymentPageState extends State<JobLocationEmploymentPage> {
                   // Prepare job data
                   final jobData = formProvider.getJobData(
                     hrPhone: hrPhone,
-                    coordinates: hrProvider.coordinates,
                   );
                   
-                  // Check remaining credits before navigation
-                  await unifiedBillingProvider.fetchAllData();
-                  final remainingCredits = unifiedBillingProvider.remainingCredits;
+                  // Always create job as draft first (new flow)
+                  print("📝 Creating job as draft");
                   
-                  print("💳 Remaining credits: $remainingCredits");
+                  // Show loading indicator
+                  showDialog(
+                    context: context,
+                    barrierDismissible: false,
+                    builder: (dialogContext) => const Center(
+                      child: CircularProgressIndicator(),
+                    ),
+                  );
                   
-                  if (remainingCredits > 0) {
-                    // User has credits - create job directly
-                    print("✅ User has credits, creating job directly");
-                    
-                    // Show loading indicator
-                    showDialog(
+                  try {
+                    // Create job as draft (no credit check needed)
+                    final jobId = await JobCreationService.createJobAsDraft(
                       context: context,
-                      barrierDismissible: false,
-                      builder: (dialogContext) => const Center(
-                        child: CircularProgressIndicator(),
-                      ),
+                      jobData: jobData,
                     );
                     
-                    try {
-                      // Create job with credit deduction
-                      final success = await JobCreationService.createJobWithCreditDeduction(
-                        context: context,
-                        jobData: jobData,
-                      );
+                    // Remove loading indicator
+                    if (mounted && Navigator.canPop(context)) {
+                      Navigator.of(context).pop(); // Remove loading dialog
+                    }
+                    
+                    if (jobId != null) {
+                      // Job created as draft successfully
+                      print("✅ Job created as draft with ID: $jobId");
                       
-                      // Remove loading indicator first
-                      if (mounted && Navigator.canPop(context)) {
-                        Navigator.of(context).pop(); // Remove loading dialog
-                      }
-                      
-                      if (success) {
-                        // Navigate to home screen after successful job creation
-                        if (mounted) {
-                          Navigator.of(context).pushAndRemoveUntil(
-                            MaterialPageRoute(
-                              builder: (context) => const BottomNavBar(initialIndex: 1),
-                            ),
-                            (Route<dynamic> route) => false,
-                          );
-                        }
-                      } else {
-                        print("❌ Job creation failed");
-                      }
-                    } catch (e) {
-                      // Remove loading indicator on error
-                      if (mounted && Navigator.canPop(context)) {
-                        Navigator.of(context).pop(); // Remove loading dialog
-                      }
-                      
+                      // Show success message and navigate to jobs screen
                       if (mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
-                            content: Text('Error creating job: $e'),
+                            content: const Text('Job saved as draft successfully! You can publish it from the Jobs screen.'),
+                            backgroundColor: AppColors.success,
+                            duration: const Duration(seconds: 3),
+                          ),
+                        );
+                        
+                        // Navigate to jobs screen where user can publish the draft
+                        Navigator.of(context).pushAndRemoveUntil(
+                          MaterialPageRoute(
+                            builder: (context) => const BottomNavBar(initialIndex: 1),
+                          ),
+                          (Route<dynamic> route) => false,
+                        );
+                      }
+                    } else {
+                      // Job creation failed
+                      print("❌ Failed to create job as draft");
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: const Text('Failed to create job. Please try again.'),
                             backgroundColor: AppColors.error,
                           ),
                         );
                       }
                     }
-                  } else {
-                    // No credits - navigate to subscription page
-                    print("❌ No credits available, showing plan selection");
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => Subscription(jobData: jobData),
-                      ),
-                    );
+                  } catch (e) {
+                    // Remove loading indicator on error
+                    if (mounted && Navigator.canPop(context)) {
+                      Navigator.of(context).pop(); // Remove loading dialog
+                    }
+                    
+                    if (mounted) {
+                      print("❌ Job creation error: $e");
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: const Text('Unable to create job. Please try again.'),
+                          backgroundColor: AppColors.error,
+                        ),
+                      );
+                    }
                   }
                 } else {
                   ScaffoldMessenger.of(context).showSnackBar(

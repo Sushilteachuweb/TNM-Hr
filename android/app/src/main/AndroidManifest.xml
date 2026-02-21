@@ -1,20 +1,21 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- Camera permission for taking profile photos -->
-    <uses-permission android:name="android.permission.CAMERA" />
+    <!-- Internet permission required for network access -->
+    <uses-permission android:name="android.permission.INTERNET" />
     
-    <!-- Storage permissions for profile image access -->
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" 
-                     android:maxSdkVersion="32" />
-    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" 
-                     android:maxSdkVersion="29" />
+    <!-- Removed READ_MEDIA_IMAGES and READ_EXTERNAL_STORAGE permissions -->
+    <!-- Using Android Photo Picker instead for image selection -->
     
-    <!-- Media permissions for Android 13+ -->
-    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <!-- Camera permission - only if you need direct camera access -->
+    <!-- <uses-permission android:name="android.permission.CAMERA" /> -->
     
     <application
         android:label="TNM Recruiter"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:allowBackup="false"
+        android:requestLegacyExternalStorage="false"
+        android:usesCleartextTraffic="false"
+        android:networkSecurityConfig="@xml/network_security_config">
         <activity
             android:name=".MainActivity"
             android:exported="true"

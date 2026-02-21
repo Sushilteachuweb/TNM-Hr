@@ -1,17 +1,31 @@
--keep class com.google.android.gms.auth.api.credentials.** { *; }
--keep class com.google.android.apps.nbu.paisa.inapp.** { *; }
--keep class com.razorpay.** { *; }
--keepclassmembers class * {
-    @proguard.annotation.Keep *;
-}
--keep @proguard.annotation.Keep class *
--keepclassmembers class * {
-    @proguard.annotation.KeepClassMembers *;
-}
--dontwarn com.google.android.gms.auth.api.credentials.**
--dontwarn com.google.android.apps.nbu.paisa.inapp.**
--dontwarn proguard.annotation.**
--keepattributes *Annotation*
--keepattributes Signature
--keepattributes Exceptions
+# Flutter wrapper
+-keep class io.flutter.app.** { *; }
+-keep class io.flutter.plugin.**  { *; }
+-keep class io.flutter.util.**  { *; }
+-keep class io.flutter.view.**  { *; }
+-keep class io.flutter.**  { *; }
+-keep class io.flutter.plugins.**  { *; }
 
+# Gson specific classes
+-keepattributes Signature
+-keepattributes *Annotation*
+-keep class sun.misc.Unsafe { *; }
+-keep class com.google.gson.stream.** { *; }
+
+# Application classes that will be serialized/deserialized over Gson
+-keep class com.techuweb.hrportal.** { *; }
+
+# Razorpay
+-keep class com.razorpay.** {*;}
+-keep class com.olacabs.** {*;}
+-keep class com.razorpay.RzpTokenReceiver
+
+# HTTP
+-keep class okhttp3.** { *; }
+-keep class retrofit2.** { *; }
+-keepclasseswithmembers class * {
+    @retrofit2.http.* <methods>;
+}
+
+# Image picker
+-keep class androidx.lifecycle.** { *; }

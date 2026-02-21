@@ -42,7 +42,8 @@ class ActivePlanProvider with ChangeNotifier {
         print("❌ Failed to load active plan: $_errorMessage");
       }
     } catch (e) {
-      _errorMessage = 'Network error: $e';
+      print("❌ Active plan fetch error: $e");
+      _errorMessage = 'Unable to load plan information. Please try again.';
       _activePlan = null;
       _hasLoadedOnce = true;
       print("💥 Error loading active plan: $e");

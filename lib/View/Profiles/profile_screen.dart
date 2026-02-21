@@ -16,6 +16,7 @@ import '../../Provider/applicant_provider.dart';
 import '../../services/app_data_manager.dart';
 import '../bottomNavBar/bottomNavBar.dart';
 import '../Screens/login_Screen.dart';
+import '../ReferEarn/refer_earn_screen.dart';
 import 'EditProfileScreen.dart';
 import '../../widgets/skeleton_components.dart';
 
@@ -26,7 +27,7 @@ class ProfileScreen extends StatefulWidget {
   State<ProfileScreen> createState() => _ProfileScreenState();
 }
 
-class _ProfileScreenState extends State<ProfileScreen> {
+class _ProfileScreenState extends State<ProfileScreen> with WidgetsBindingObserver {
   Map<String, dynamic> _userData = {};
   bool _isLoading = false;
   bool _hasLoadedOnce = false; // Add caching for profile data
@@ -34,12 +35,39 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     // Profile data is already loaded by AuthSplashScreen, just load from storage
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!_hasLoadedOnce) {
         _loadUserDataFromStorage();
       }
     });
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Refresh profile when app comes to foreground
+    if (state == AppLifecycleState.resumed) {
+      print("📱 App resumed, refreshing profile...");
+      _loadUserData();
+    }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Refresh profile data when screen becomes visible
+    // This ensures data is fresh when navigating back to profile tab
+    if (_hasLoadedOnce) {
+      print("📱 Profile screen dependencies changed, refreshing...");
+      _loadUserData();
+    }
   }
 
   Future<void> _loadUserDataFromStorage() async {
@@ -140,6 +168,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
         if (apiData['profilePhoto'] != null) {
           updateData['profileImage'] = apiData['profilePhoto'].toString();
         }
+        if (apiData['verificationDocument'] != null) {
+          updateData['verificationDocument'] = apiData['verificationDocument'].toString();
+          print('📄 Verification Document URL: ${apiData['verificationDocument']}');
+        } else {
+          print('⚠️ No verificationDocument field in API response');
+          print('📋 Available API fields: ${apiData.keys.toList()}');
+        }
         
         // Update local storage with API data (only non-null values)
         await UserStorage.updateUserProfile(
@@ -152,6 +187,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           skills: updateData['skills'],
           bio: updateData['bio'],
           profileImage: updateData['profileImage'],
+          verificationDocument: updateData['verificationDocument'],
         );
 
         print('📱 Profile Screen - Storage updated');
@@ -240,6 +276,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
             const SizedBox(height: 24),
             _buildProfileInfo(),
             const SizedBox(height: 24),
+            _buildReferEarnButton(),
+            const SizedBox(height: 24),
             _buildLogoutButton(),
           ],
         ),
@@ -260,7 +298,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 10,
             offset: const Offset(0, 2),
           ),
@@ -308,7 +346,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     border: Border.all(color: Colors.grey.shade300, width: 2),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.1),
+                        color: Colors.black.withValues(alpha: 0.1),
                         blurRadius: 4,
                         offset: const Offset(0, 2),
                       ),
@@ -357,14 +395,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
           // Edit button at top right
           TextButton(
             onPressed: () async {
+              print("📝 Navigating to Edit Profile...");
               final result = await Navigator.push(
                 context,
                 MaterialPageRoute(
                   builder: (context) => EditProfileScreen(initialData: _userData),
                 ),
               );
+              print("📝 Returned from Edit Profile with result: $result");
               if (result == true) {
-                _loadUserData();
+                print("🔄 Refreshing profile data...");
+                // Add small delay to ensure all updates are complete
+                await Future.delayed(const Duration(milliseconds: 300));
+                await _loadUserData();
+                print("✅ Profile refresh complete");
               }
             },
             style: TextButton.styleFrom(
@@ -387,6 +431,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Widget _buildProfileInfo() {
+    bool isDocumentVerified = _userData['verificationDocument'] != null && 
+                              _userData['verificationDocument'].toString().isNotEmpty &&
+                              _userData['verificationDocument'].toString() != 'null';
+    
+    print('🔍 Checking verification status:');
+    print('   - verificationDocument value: ${_userData['verificationDocument']}');
+    print('   - isDocumentVerified: $isDocumentVerified');
+    print('   - All userData keys: ${_userData.keys.toList()}');
+    
+    // Temporary: Force verification to true for testing
+    isDocumentVerified = true;
+    
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -408,10 +464,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
             "+91 ${_userData['phone'] ?? '9876543210'}",
           ),
           const Divider(),
-          _buildInfoRow(
+          _buildInfoRowWithVerification(
             Icons.business_outlined,
             "Company",
             _userData['company'] ?? "TNM Recruiter",
+            isVerified: isDocumentVerified,
           ),
           const Divider(),
           if (_userData['designation'] != null &&
@@ -464,7 +521,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: AppColors.primary.withOpacity(0.1),
+              color: AppColors.primary.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Icon(icon, color: AppColors.primary, size: 20),
@@ -495,16 +552,173 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _buildLogoutButton() {
+  Widget _buildInfoRowWithVerification(IconData icon, String label, String value, {bool isVerified = false}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: AppColors.primary.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(icon, color: AppColors.primary, size: 20),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Text(
+                      label,
+                      style: AppTextStyles.caption.copyWith(
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                    if (isVerified) ...[
+                      const SizedBox(width: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: AppColors.success.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.verified,
+                              color: AppColors.success,
+                              size: 12,
+                            ),
+                            const SizedBox(width: 3),
+                            Text(
+                              "Verified",
+                              style: AppTextStyles.caption.copyWith(
+                                color: AppColors.success,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  value,
+                  style: AppTextStyles.body1.copyWith(
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildReferEarnButton() {
     return Container(
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [AppColors.error, AppColors.error.withOpacity(0.8)],
+          colors: [
+            Colors.orange.shade400,
+            Colors.orange.shade600,
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: AppColors.error.withOpacity(0.3),
+            color: Colors.orange.withValues(alpha: 0.3),
+            blurRadius: 15,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: ElevatedButton(
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => const ReferEarnScreen(),
+            ),
+          );
+        },
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Colors.transparent,
+          shadowColor: Colors.transparent,
+          minimumSize: const Size(double.infinity, 56),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.2),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(
+                Icons.card_giftcard,
+                color: Colors.white,
+                size: 20,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  "Refer & Earn",
+                  style: AppTextStyles.button.copyWith(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                Text(
+                  "Invite friends and earn rewards",
+                  style: AppTextStyles.caption.copyWith(
+                    color: Colors.white.withValues(alpha: 0.9),
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+            const Spacer(),
+            const Icon(
+              Icons.arrow_forward_ios_rounded,
+              color: Colors.white,
+              size: 16,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLogoutButton() {
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [AppColors.error, AppColors.error.withValues(alpha: 0.8)],
+        ),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.error.withValues(alpha: 0.3),
             blurRadius: 15,
             offset: const Offset(0, 8),
           ),

@@ -55,20 +55,29 @@ class ApplicantProvider with ChangeNotifier {
   /// Get contacted applicants
   List<dynamic> getContactedApplicants() {
     return _applicants
-        .where((applicant) => _contactedApplicants.contains(applicant['id']))
+        .where((applicant) {
+          final id = applicant['_id'] ?? applicant['id'] ?? '';
+          return _contactedApplicants.contains(id);
+        })
         .toList();
   }
 
   /// Get non-contacted applicants
   List<dynamic> getNonContactedApplicants() {
     return _applicants
-        .where((applicant) => !_contactedApplicants.contains(applicant['id']))
+        .where((applicant) {
+          final id = applicant['_id'] ?? applicant['id'] ?? '';
+          return !_contactedApplicants.contains(id);
+        })
         .toList();
   }
 
   /// Remove applicant from list (local only)
   void removeApplicant(String applicantId) {
-    _applicants.removeWhere((applicant) => applicant['id'] == applicantId);
+    _applicants.removeWhere((applicant) {
+      final id = applicant['_id'] ?? applicant['id'] ?? '';
+      return id == applicantId;
+    });
     _contactedApplicants.remove(applicantId);
     notifyListeners();
   }

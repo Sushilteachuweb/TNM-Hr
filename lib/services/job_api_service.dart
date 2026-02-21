@@ -5,6 +5,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'api_routes.dart';
 import 'cookie_manager.dart';
+import 'user_storage.dart';
 import '../models/job_category_model.dart';
 
 class JobApiService {
@@ -52,6 +53,11 @@ class JobApiService {
       print("📝 Job Title: $title");
       print("🏢 Company: $companyName");
       print("💰 Plan Type: $planType");
+      print("🌍 LOCATION DETAILS:");
+      print("  📍 Work Location: $workLocation");
+      print("  🏙️ Job Location: $jobLocation");
+      print("  ⭐ Preferred Location: $preferredLocation");
+      print("  🏠 Office Address: $officeAddress");
       print("═══════════════════════════════════════");
 
       final body = {
@@ -112,13 +118,14 @@ class JobApiService {
       final data = jsonDecode(response.body);
 
       if (response.statusCode == 200 || response.statusCode == 201) {
-        print("✅ SUCCESS: Job created successfully!");
+        print("✅ SUCCESS: Job created as draft successfully!");
         print("📋 Response Data: $data");
         print("═══════════════════════════════════════");
         return {
           'success': true,
-          'message': data['message'] ?? 'Job created successfully',
+          'message': data['message'] ?? 'Job created as draft successfully',
           'data': data,
+          'jobId': data['data']?['_id'] ?? data['data']?['id'],
         };
       } else {
         print("❌ FAILED: Job creation failed");
@@ -156,7 +163,19 @@ class JobApiService {
   /// Get HR Jobs
   static Future<Map<String, dynamic>> getHrJobs() async {
     try {
-      print("💼 Calling Get HR Jobs API: ${ApiConfig.getHrJobs}");
+      // Use phone number as HR ID for fetching jobs
+      final phone = await UserStorage.getPhone();
+      if (phone.isEmpty) {
+        print("❌ No phone number found in storage");
+        return {
+          'success': false,
+          'message': 'Phone number not found. Please log in again.',
+        };
+      }
+
+      print("💼 Using phone number as HR ID: $phone");
+      final endpoint = ApiConfig.getHrJobs(phone);
+      print("💼 Calling Get HR Jobs API: $endpoint");
 
       final headers = await _getHeaders();
       print("💼 Request Headers: $headers");
@@ -173,7 +192,7 @@ class JobApiService {
       
       final response = await http
           .get(
-            Uri.parse(ApiConfig.getHrJobs),
+            Uri.parse(endpoint),
             headers: headers,
           )
           .timeout(const Duration(seconds: 30));
@@ -223,6 +242,95 @@ class JobApiService {
       };
     } catch (e) {
       print("❌ Get Jobs error: $e");
+      return {
+        'success': false,
+        'message': 'Something went wrong. Try again later.',
+      };
+    }
+  }
+
+  /// Get Draft Jobs
+  static Future<Map<String, dynamic>> getDraftJobs() async {
+    try {
+      // Use phone number as HR ID for fetching draft jobs
+      final phone = await UserStorage.getPhone();
+      if (phone.isEmpty) {
+        print("❌ No phone number found in storage");
+        return {
+          'success': false,
+          'message': 'Phone number not found. Please log in again.',
+        };
+      }
+
+      print("💼 Using phone number as HR ID: $phone");
+      final endpoint = ApiConfig.getDraftJobs(phone);
+      print("💼 Calling Get Draft Jobs API: $endpoint");
+
+      final headers = await _getHeaders();
+      print("💼 Request Headers: $headers");
+      
+      // Check if we have a valid cookie
+      final cookie = await CookieManager.getCookie();
+      if (cookie == null || cookie.isEmpty) {
+        print("❌ No authentication cookie found - user may not be logged in");
+        return {
+          'success': false,
+          'message': 'Authentication required. Please log in again.',
+        };
+      }
+      
+      final response = await http
+          .get(
+            Uri.parse(endpoint),
+            headers: headers,
+          )
+          .timeout(const Duration(seconds: 30));
+
+      print("💼 Raw Response: ${response.body}");
+      print("💼 Status Code: ${response.statusCode}");
+      print("💼 Response Headers: ${response.headers}");
+
+      // Handle different status codes
+      if (response.statusCode == 401) {
+        print("❌ Unauthorized - authentication failed");
+        return {
+          'success': false,
+          'message': 'Authentication failed. Please log in again.',
+        };
+      }
+
+      if (response.statusCode == 404) {
+        print("❌ Endpoint not found - API may not exist");
+        return {
+          'success': false,
+          'message': 'Draft jobs endpoint not found.',
+        };
+      }
+
+      final data = jsonDecode(response.body);
+
+      if (response.statusCode == 200) {
+        print("✅ Draft jobs fetched successfully");
+        print("💼 Draft jobs data: $data");
+        return {
+          'success': true,
+          'data': data,
+        };
+      } else {
+        print("❌ Get Draft Jobs failed: ${data['message']}");
+        return {
+          'success': false,
+          'message': data['message']?.toString() ?? 'Failed to fetch draft jobs',
+        };
+      }
+    } on TimeoutException catch (e) {
+      print("⏱️ Timeout Error: $e");
+      return {
+        'success': false,
+        'message': 'Server is not responding. Try again later.',
+      };
+    } catch (e) {
+      print("❌ Get Draft Jobs error: $e");
       return {
         'success': false,
         'message': 'Something went wrong. Try again later.',
@@ -360,15 +468,34 @@ class JobApiService {
       print("💼 Raw Response: ${response.body}");
       print("💼 Status Code: ${response.statusCode}");
 
-      final data = jsonDecode(response.body);
-
       if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
         print("✅ Applied users fetched successfully");
+        print("💼 Response data structure: ${data.keys}");
+        
+        // Handle different response structures
+        List<dynamic> applicants = [];
+        
+        if (data['applicants'] != null) {
+          applicants = data['applicants'];
+        } else if (data['data'] != null && data['data']['applicants'] != null) {
+          applicants = data['data']['applicants'];
+        } else if (data['data'] != null && data['data'] is List) {
+          applicants = data['data'];
+        } else if (data is List) {
+          applicants = data;
+        }
+        
+        print("💼 Found ${applicants.length} applicants");
+        
         return {
           'success': true,
-          'data': data,
+          'data': {
+            'applicants': applicants,
+          },
         };
       } else {
+        final data = jsonDecode(response.body);
         print("❌ Get Applied Users failed: ${data['message']}");
         
         // Handle specific error cases
@@ -430,6 +557,79 @@ class JobApiService {
     } catch (e) {
       print("❌ Get Job Categories error: $e");
       return null;
+    }
+  }
+
+  /// Publish Job - checks credits and publishes draft job
+  static Future<Map<String, dynamic>> publishJob(String jobId) async {
+    try {
+      print("═══════════════════════════════════════");
+      print("🚀 PUBLISH JOB API CALL STARTED");
+      print("═══════════════════════════════════════");
+      print("💼 API Endpoint: ${ApiConfig.publishJob(jobId)}");
+      print("📝 Job ID: $jobId");
+      print("═══════════════════════════════════════");
+
+      final headers = await _getHeaders();
+      print("🔑 Request Headers: $headers");
+      print("═══════════════════════════════════════");
+      
+      print("⏳ Sending request...");
+      final response = await http
+          .post(
+            Uri.parse(ApiConfig.publishJob(jobId)),
+            headers: headers,
+          )
+          .timeout(const Duration(seconds: 30));
+
+      print("═══════════════════════════════════════");
+      print("📥 RESPONSE RECEIVED");
+      print("═══════════════════════════════════════");
+      print("📊 Status Code: ${response.statusCode}");
+      print("📄 Response Body: ${response.body}");
+      print("═══════════════════════════════════════");
+
+      final data = jsonDecode(response.body);
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        print("✅ SUCCESS: Job published successfully!");
+        print("📋 Response Data: $data");
+        print("═══════════════════════════════════════");
+        return {
+          'success': true,
+          'message': data['message'] ?? 'Job published successfully',
+          'data': data,
+        };
+      } else {
+        print("❌ FAILED: Job publish failed");
+        print("⚠️ Error Message: ${data['message']}");
+        print("═══════════════════════════════════════");
+        return {
+          'success': false,
+          'message': data['message']?.toString() ?? 'Failed to publish job',
+        };
+      }
+    } on TimeoutException catch (e) {
+      print("═══════════════════════════════════════");
+      print("⏱️ TIMEOUT ERROR");
+      print("═══════════════════════════════════════");
+      print("Error: $e");
+      print("═══════════════════════════════════════");
+      return {
+        'success': false,
+        'message': 'Server is not responding. Try again later.',
+      };
+    } catch (e) {
+      print("═══════════════════════════════════════");
+      print("❌ EXCEPTION OCCURRED");
+      print("═══════════════════════════════════════");
+      print("Error: $e");
+      print("Stack trace: ${StackTrace.current}");
+      print("═══════════════════════════════════════");
+      return {
+        'success': false,
+        'message': 'Something went wrong. Try again later.',
+      };
     }
   }
 }

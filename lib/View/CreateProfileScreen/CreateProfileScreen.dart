@@ -1,12 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
-import '../bottomNavBar/bottomNavBar.dart';
+import 'DocumentSubmissionScreen.dart';
 import '../../core/app_colors.dart';
 import '../../core/app_text_styles.dart';
-import '../../services/user_storage.dart';
-import '../../services/auth_api_service.dart';
-import '../../services/app_data_manager.dart';
 import 'dart:io';
 
 class CreateProfileScreen extends StatefulWidget {
@@ -35,77 +32,21 @@ class _CreateProfileScreenState extends State<CreateProfileScreen> {
     super.dispose();
   }
 
-  bool _isLoading = false;
-
   void _submitProfile() async {
     if (_formKey.currentState!.validate()) {
-      setState(() {
-        _isLoading = true;
-      });
-
-      // Get phone from storage
-      final phone = await UserStorage.getPhone();
-
-      // Call signup API
-      final result = await AuthApiService.signup(
-        fullName: _nameController.text,
-        phone: phone,
-        email: _emailController.text,
-        companyName: _companyController.text,
-        totalEmp: int.parse(_employeeSizeController.text),
+      // Navigate to document submission screen
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => DocumentSubmissionScreen(
+            fullName: _nameController.text,
+            email: _emailController.text,
+            companyName: _companyController.text,
+            totalEmp: int.parse(_employeeSizeController.text),
+            profileImage: _selectedImage,
+          ),
+        ),
       );
-
-      setState(() {
-        _isLoading = false;
-      });
-
-      if (result['success'] == true) {
-        // Save hrId and userId if returned from signup
-        if (result['hrId'] != null || result['userId'] != null) {
-          await UserStorage.saveLoginData(
-            phone: phone,
-            isExistingUser: false,
-            hrId: result['hrId'],
-            userId: result['userId'],
-          );
-        }
-
-        // Update local storage
-        await UserStorage.updateUserProfile(
-          userName: _nameController.text,
-          userEmail: _emailController.text,
-          company: _companyController.text,
-          profileImage: _selectedImage?.path,
-        );
-
-        print("✅ Profile created successfully");
-
-        // Initialize app data for new users
-        print("🚀 Initializing app data after profile creation...");
-        await AppDataManager.initializeAppData(context);
-        print("✅ App data initialization completed after profile creation");
-
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (context) => const BottomNavBar(
-              showProfileCompletionSnackbar: true,
-            ),
-          ),
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(result['message'] ?? 'Unable to create profile. Please try again.'),
-            backgroundColor: AppColors.error,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-            margin: const EdgeInsets.all(16),
-          ),
-        );
-      }
     }
   }
 
@@ -116,25 +57,65 @@ class _CreateProfileScreenState extends State<CreateProfileScreen> {
         maxWidth: 300,
         maxHeight: 300,
         imageQuality: 80,
+        requestFullMetadata: false, // Reduces permission requirements
       );
 
       if (image != null) {
+        // Validate file extension
+        final fileName = image.path.toLowerCase();
+        final validExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp'];
+        final hasValidExtension = validExtensions.any((ext) => fileName.endsWith(ext));
+        
+        if (!hasValidExtension) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text("Only image files are allowed (jpg, jpeg, png, gif, webp)"),
+                backgroundColor: AppColors.error,
+              ),
+            );
+          }
+          return;
+        }
+        
         setState(() {
           _selectedImage = File(image.path);
         });
       }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text("Unable to select image. Please try again."),
-          backgroundColor: AppColors.error,
-          action: SnackBarAction(
-            label: 'Retry',
-            textColor: Colors.white,
-            onPressed: () => _pickImage(),
+    } on PlatformException catch (e) {
+      String errorMessage = "Unable to select image. Please try again.";
+      
+      if (e.code == 'photo_access_denied') {
+        errorMessage = "Photo access denied. Please enable photo permissions in settings.";
+      }
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(errorMessage),
+            backgroundColor: AppColors.error,
+            action: SnackBarAction(
+              label: 'Retry',
+              textColor: Colors.white,
+              onPressed: () => _pickImage(),
+            ),
           ),
-        ),
-      );
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text("Unable to select image. Please try again."),
+            backgroundColor: AppColors.error,
+            action: SnackBarAction(
+              label: 'Retry',
+              textColor: Colors.white,
+              onPressed: () => _pickImage(),
+            ),
+          ),
+        );
+      }
     }
   }
 
@@ -145,25 +126,65 @@ class _CreateProfileScreenState extends State<CreateProfileScreen> {
         maxWidth: 300,
         maxHeight: 300,
         imageQuality: 80,
+        requestFullMetadata: false, // Reduces permission requirements
       );
 
       if (image != null) {
+        // Validate file extension
+        final fileName = image.path.toLowerCase();
+        final validExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp'];
+        final hasValidExtension = validExtensions.any((ext) => fileName.endsWith(ext));
+        
+        if (!hasValidExtension) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text("Only image files are allowed (jpg, jpeg, png, gif, webp)"),
+                backgroundColor: AppColors.error,
+              ),
+            );
+          }
+          return;
+        }
+        
         setState(() {
           _selectedImage = File(image.path);
         });
       }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text("Unable to take photo. Please try again."),
-          backgroundColor: AppColors.error,
-          action: SnackBarAction(
-            label: 'Retry',
-            textColor: Colors.white,
-            onPressed: () => _takePhoto(),
+    } on PlatformException catch (e) {
+      String errorMessage = "Unable to take photo. Please try again.";
+      
+      if (e.code == 'camera_access_denied') {
+        errorMessage = "Camera access denied. Please enable camera permissions in settings.";
+      }
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(errorMessage),
+            backgroundColor: AppColors.error,
+            action: SnackBarAction(
+              label: 'Retry',
+              textColor: Colors.white,
+              onPressed: () => _takePhoto(),
+            ),
           ),
-        ),
-      );
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text("Unable to take photo. Please try again."),
+            backgroundColor: AppColors.error,
+            action: SnackBarAction(
+              label: 'Retry',
+              textColor: Colors.white,
+              onPressed: () => _takePhoto(),
+            ),
+          ),
+        );
+      }
     }
   }
 
@@ -551,7 +572,7 @@ class _CreateProfileScreenState extends State<CreateProfileScreen> {
         boxShadow: [AppColors.buttonShadow],
       ),
       child: ElevatedButton(
-        onPressed: _isLoading ? null : _submitProfile,
+        onPressed: _submitProfile,
         style: ElevatedButton.styleFrom(
           backgroundColor: Colors.transparent,
           shadowColor: Colors.transparent,
@@ -560,19 +581,21 @@ class _CreateProfileScreenState extends State<CreateProfileScreen> {
             borderRadius: BorderRadius.circular(16),
           ),
         ),
-        child: _isLoading
-            ? const SizedBox(
-                height: 24,
-                width: 24,
-                child: CircularProgressIndicator(
-                  color: Colors.white,
-                  strokeWidth: 2,
-                ),
-              )
-            : Text(
-                "Complete Profile",
-                style: AppTextStyles.button.copyWith(color: Colors.white),
-              ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              "Next",
+              style: AppTextStyles.button.copyWith(color: Colors.white),
+            ),
+            const SizedBox(width: 8),
+            const Icon(
+              Icons.arrow_forward_rounded,
+              color: Colors.white,
+              size: 20,
+            ),
+          ],
+        ),
       ),
     );
   }

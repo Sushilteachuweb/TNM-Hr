@@ -55,7 +55,8 @@ class BillingProvider with ChangeNotifier {
       
       _errorMessage = '';
     } catch (e) {
-      _errorMessage = 'Failed to load billing history: $e';
+      print("❌ Billing history error: $e");
+      _errorMessage = 'Unable to load billing history. Please check your connection and try again.';
       _billingHistory = [];
     } finally {
       _isLoading = false;

@@ -60,7 +60,8 @@ class PlanProvider with ChangeNotifier {
         _hasLoadedOnce = true;
       }
     } catch (e) {
-      _errorMessage = 'Network error: $e';
+      print("❌ Plans fetch error: $e");
+      _errorMessage = 'Unable to load plans. Please check your connection and try again.';
       _plans = [];
       // Set hasLoadedOnce to true even on error to prevent infinite skeleton loading
       _hasLoadedOnce = true;
@@ -113,7 +114,7 @@ class PlanProvider with ChangeNotifier {
     } catch (e) {
       return {
         'success': false,
-        'message': 'Failed to buy plan: $e',
+        'message': 'Unable to process plan purchase. Please try again.',
         'order': null
       };
     }

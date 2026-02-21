@@ -4,6 +4,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../core/app_colors.dart';
 import '../../../core/app_text_styles.dart';
 import '../../../Provider/applicant_provider.dart';
+import '../../../Provider/job_provider.dart';
 import '../../../widgets/skeleton_loading.dart';
 
 class Applicants extends StatefulWidget {
@@ -28,6 +29,8 @@ class _ApplicantsState extends State<Applicants> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<ApplicantProvider>().fetchApplicants(widget.jobId);
+      // Also update the job's applicant count in the job provider
+      context.read<JobProvider>().updateJobApplicantCount(widget.jobId);
     });
   }
 
@@ -341,7 +344,17 @@ class _ApplicantsState extends State<Applicants> {
               CircleAvatar(
                 radius: 35,
                 backgroundColor: Colors.grey[200],
-                child: Icon(Icons.person, size: 40, color: Colors.grey[600]),
+                backgroundImage: applicant['image'] != null && applicant['image'].toString().isNotEmpty
+                    ? NetworkImage('https://api.thenaukrimitra.com/uploads/${applicant['image']}')
+                    : null,
+                child: applicant['image'] == null || applicant['image'].toString().isEmpty
+                    ? Icon(Icons.person, size: 40, color: Colors.grey[600])
+                    : null,
+                onBackgroundImageError: applicant['image'] != null
+                    ? (exception, stackTrace) {
+                        print('Error loading image: $exception');
+                      }
+                    : null,
               ),
               const SizedBox(width: 16),
               Expanded(
@@ -361,41 +374,46 @@ class _ApplicantsState extends State<Applicants> {
                       children: [
                         Expanded(
                           child: _buildDetailText(
-                            Icons.currency_rupee,
-                            '₹${applicant['expectedSalary'] ?? applicant['salary'] ?? 'N/A'}',
+                            Icons.account_balance_wallet_outlined,
+                            applicant['currentSalary']?.toString() ?? 
+                            applicant['expectedSalary']?.toString() ?? 
+                            applicant['salary']?.toString() ?? 
+                            'Not specified',
                             AppColors.success,
                           ),
                         ),
                         Expanded(
                           child: _buildDetailText(
-                            Icons.school,
-                            applicant['education'] ?? 'N/A',
+                            Icons.school_outlined,
+                            applicant['education'] ?? 'Not specified',
                             AppColors.primary,
                           ),
                         ),
                         Expanded(
                           child: _buildDetailText(
                             Icons.work_outline,
-                            '${applicant['experience'] ?? 0} yrs',
+                            '${applicant['totalExperience'] ?? applicant['experience'] ?? '0'} yrs',
                             AppColors.info,
                           ),
                         ),
                       ],
                     ),
                     const SizedBox(height: 16),
-                    if (applicant['skills'] != null)
+                    if (applicant['skills'] != null && applicant['skills'].toString().isNotEmpty)
                       _buildInfoRow(
                         'Skills',
                         applicant['skills'] is List
-                            ? (applicant['skills'] as List).join(', ')
+                            ? (applicant['skills'] as List).where((s) => s != null && s.toString().isNotEmpty).join(', ')
                             : applicant['skills'].toString(),
                       ),
-                    if (applicant['skills'] != null) const SizedBox(height: 8),
-                    if (applicant['city'] != null)
-                      _buildInfoRow('Location', applicant['city'] ?? 'N/A'),
-                    if (applicant['city'] != null) const SizedBox(height: 8),
-                    if (applicant['email'] != null)
-                      _buildInfoRow('Email', applicant['email'] ?? 'N/A'),
+                    if (applicant['skills'] != null && applicant['skills'].toString().isNotEmpty) 
+                      const SizedBox(height: 8),
+                    if ((applicant['userLocation'] ?? applicant['city'])?.toString().isNotEmpty == true)
+                      _buildInfoRow('Location', applicant['userLocation'] ?? applicant['city'] ?? 'Not specified'),
+                    if ((applicant['userLocation'] ?? applicant['city'])?.toString().isNotEmpty == true) 
+                      const SizedBox(height: 8),
+                    if (applicant['email'] != null && applicant['email'].toString().isNotEmpty)
+                      _buildInfoRow('Email', applicant['email'] ?? 'Not specified'),
                   ],
                 ),
               ),
@@ -504,74 +522,76 @@ class _ApplicantsState extends State<Applicants> {
             ],
           ),
           const SizedBox(height: 10),
-          InkWell(
-            onTap: () {
-              _inviteForInterview(applicant['fullName'] ?? 'Applicant');
-              applicantProvider.markAsContacted(applicantId);
-            },
-            borderRadius: BorderRadius.circular(16),
-            child: Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [Color(0xFF6366F1), Color(0xFF8B5CF6)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: [
-                  BoxShadow(
-                    color: const Color(0xFF6366F1).withOpacity(0.4),
-                    blurRadius: 12,
-                    spreadRadius: 1,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: const Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.event_available_rounded,
-                    size: 20,
-                    color: Colors.white,
-                  ),
-                  SizedBox(width: 8),
-                  Text(
-                    'Invite for Interview',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 14,
-                      letterSpacing: 0.5,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 12),
-          Center(
-            child: InkWell(
-              onTap: () => _removeApplicant(applicantId),
-              borderRadius: BorderRadius.circular(8),
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 6,
-                ),
-                child: Text(
-                  'Remove',
-                  style: TextStyle(
-                    color: AppColors.error,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ),
-          ),
+          // Commented out Invite for Interview button as requested
+          // InkWell(
+          //   onTap: () {
+          //     _inviteForInterview(applicant['fullName'] ?? 'Applicant');
+          //     applicantProvider.markAsContacted(applicantId);
+          //   },
+          //   borderRadius: BorderRadius.circular(16),
+          //   child: Container(
+          //     width: double.infinity,
+          //     padding: const EdgeInsets.symmetric(vertical: 14),
+          //     decoration: BoxDecoration(
+          //       gradient: const LinearGradient(
+          //         colors: [Color(0xFF6366F1), Color(0xFF8B5CF6)],
+          //         begin: Alignment.topLeft,
+          //         end: Alignment.bottomRight,
+          //       ),
+          //       borderRadius: BorderRadius.circular(16),
+          //       boxShadow: [
+          //         BoxShadow(
+          //           color: const Color(0xFF6366F1).withOpacity(0.4),
+          //           blurRadius: 12,
+          //           spreadRadius: 1,
+          //           offset: const Offset(0, 4),
+          //         ),
+          //       ],
+          //     ),
+          //     child: const Row(
+          //       mainAxisAlignment: MainAxisAlignment.center,
+          //       children: [
+          //         Icon(
+          //           Icons.event_available_rounded,
+          //           size: 20,
+          //           color: Colors.white,
+          //         ),
+          //         SizedBox(width: 8),
+          //         Text(
+          //           'Invite for Interview',
+          //           style: TextStyle(
+          //             color: Colors.white,
+          //             fontWeight: FontWeight.w600,
+          //             fontSize: 14,
+          //             letterSpacing: 0.5,
+          //           ),
+          //         ),
+          //       ],
+          //     ),
+          //   ),
+          // ),
+          // const SizedBox(height: 12),
+          // Removed "Remove" button as requested
+          // Center(
+          //   child: InkWell(
+          //     onTap: () => _removeApplicant(applicantId),
+          //     borderRadius: BorderRadius.circular(8),
+          //     child: Container(
+          //       padding: const EdgeInsets.symmetric(
+          //         horizontal: 16,
+          //         vertical: 6,
+          //       ),
+          //       child: Text(
+          //         'Remove',
+          //         style: TextStyle(
+          //           color: AppColors.error,
+          //           fontSize: 12,
+          //           fontWeight: FontWeight.w600,
+          //         ),
+          //       ),
+          //     ),
+          //   ),
+          // ),
         ],
       ),
     );
@@ -580,13 +600,16 @@ class _ApplicantsState extends State<Applicants> {
   Widget _buildDetailText(IconData icon, String text, Color iconColor) {
     return Column(
       children: [
-        Icon(icon, size: 16, color: iconColor),
-        const SizedBox(height: 4),
+        Icon(icon, size: 20, color: iconColor),
+        const SizedBox(height: 6),
         Text(
           text,
-          style: const TextStyle(fontSize: 11),
+          style: const TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+          ),
           textAlign: TextAlign.center,
-          maxLines: 1,
+          maxLines: 2,
           overflow: TextOverflow.ellipsis,
         ),
       ],
@@ -608,16 +631,17 @@ class _ApplicantsState extends State<Applicants> {
     );
   }
 
-  void _removeApplicant(String applicantId) {
-    context.read<ApplicantProvider>().removeApplicant(applicantId);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: const Text("Applicant removed"),
-        backgroundColor: AppColors.success,
-        duration: const Duration(seconds: 2),
-      ),
-    );
-  }
+  // Commented out as Remove button functionality is no longer needed
+  // void _removeApplicant(String applicantId) {
+  //   context.read<ApplicantProvider>().removeApplicant(applicantId);
+  //   ScaffoldMessenger.of(context).showSnackBar(
+  //     SnackBar(
+  //       content: const Text("Applicant removed"),
+  //       backgroundColor: AppColors.success,
+  //       duration: const Duration(seconds: 2),
+  //     ),
+  //   );
+  // }
 
   void _showNumber(String phone) {
     showDialog(
@@ -651,13 +675,14 @@ class _ApplicantsState extends State<Applicants> {
     }
   }
 
-  void _inviteForInterview(String name) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text("Interview invitation sent to $name!"),
-        backgroundColor: AppColors.success,
-        duration: const Duration(seconds: 2),
-      ),
-    );
-  }
+  // Commented out as Invite for Interview button functionality is no longer needed
+  // void _inviteForInterview(String name) {
+  //   ScaffoldMessenger.of(context).showSnackBar(
+  //     SnackBar(
+  //       content: Text("Interview invitation sent to $name!"),
+  //       backgroundColor: AppColors.success,
+  //       duration: const Duration(seconds: 2),
+  //     ),
+  //   );
+  // }
 }

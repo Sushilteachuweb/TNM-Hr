@@ -55,8 +55,9 @@ class _PaymentDetailsScreenState extends State<PaymentDetailsScreen> {
         });
       }
     } catch (e) {
+      print("❌ Payment details fetch error: $e");
       setState(() {
-        _errorMessage = 'Network error: $e';
+        _errorMessage = 'Unable to load payment details. Please check your connection and try again.';
         _isLoading = false;
       });
     }

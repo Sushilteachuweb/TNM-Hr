@@ -180,7 +180,6 @@ class _CreateNewJobDetailsState extends State<CreateNewJobDetails> {
             // Get job data with form values + HR profile data
             final jobData = formProvider.getJobData(
               hrPhone: hrPhone,
-              coordinates: hrProfileProvider.coordinates,
             );
 
             Navigator.push(
