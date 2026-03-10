@@ -125,6 +125,7 @@ class _ProfileScreenState extends State<ProfileScreen> with WidgetsBindingObserv
         print('📱 Profile Screen - Experience: ${apiData['experience']}');
         print('📱 Profile Screen - hrLocation: ${apiData['hrLocation']}');
         print('📱 Profile Screen - Bio: ${apiData['bio']}');
+        print('📱 Profile Screen - TotalEmp: ${apiData['totalEmp']}');
         print('📱 Profile Screen - Skills: ${apiData['skills']}');
         
         // Handle skills array
@@ -165,6 +166,10 @@ class _ProfileScreenState extends State<ProfileScreen> with WidgetsBindingObserv
         if (apiData['bio'] != null) {
           updateData['bio'] = apiData['bio'].toString();
         }
+        if (apiData['totalEmp'] != null) {
+          updateData['totalEmp'] = apiData['totalEmp'].toString();
+          print('📊 Profile Screen - TotalEmp from API: ${apiData['totalEmp']}');
+        }
         if (apiData['profilePhoto'] != null) {
           updateData['profileImage'] = apiData['profilePhoto'].toString();
         }
@@ -186,6 +191,7 @@ class _ProfileScreenState extends State<ProfileScreen> with WidgetsBindingObserv
           location: updateData['location'],
           skills: updateData['skills'],
           bio: updateData['bio'],
+          totalEmp: updateData['totalEmp'],
           profileImage: updateData['profileImage'],
           verificationDocument: updateData['verificationDocument'],
         );
@@ -200,6 +206,7 @@ class _ProfileScreenState extends State<ProfileScreen> with WidgetsBindingObserv
         print('📱 Profile Screen - Stored Location: ${updatedData['location']}');
         print('📱 Profile Screen - Stored Skills: ${updatedData['skills']}');
         print('📱 Profile Screen - Stored Bio: ${updatedData['bio']}');
+        print('📱 Profile Screen - Stored TotalEmp: ${updatedData['totalEmp']}');
         setState(() {
           _userData = updatedData;
         });
@@ -218,6 +225,9 @@ class _ProfileScreenState extends State<ProfileScreen> with WidgetsBindingObserv
 
   @override
   Widget build(BuildContext context) {
+    // Debug: Log current state before building
+    print('🎨 Profile Screen - Building UI with totalEmp: ${_userData['totalEmp']}');
+    
     // Only show skeleton if loading for the first time
     if (_isLoading && !_hasLoadedOnce) {
       return Scaffold(
@@ -405,8 +415,19 @@ class _ProfileScreenState extends State<ProfileScreen> with WidgetsBindingObserv
               print("📝 Returned from Edit Profile with result: $result");
               if (result == true) {
                 print("🔄 Refreshing profile data...");
-                // Add small delay to ensure all updates are complete
-                await Future.delayed(const Duration(milliseconds: 300));
+                // Add delay to ensure API and storage updates are complete
+                await Future.delayed(const Duration(milliseconds: 500));
+                
+                // Force reload from storage first
+                final freshData = await UserStorage.getLoginData();
+                print("📊 Fresh data from storage after edit: $freshData");
+                print("📊 TotalEmp in fresh data: ${freshData['totalEmp']}");
+                
+                setState(() {
+                  _userData = freshData;
+                });
+                
+                // Then fetch from API
                 await _loadUserData();
                 print("✅ Profile refresh complete");
               }
@@ -494,6 +515,20 @@ class _ProfileScreenState extends State<ProfileScreen> with WidgetsBindingObserv
             "Location",
             _userData['location'] ?? "Noida, India",
           ),
+          if (_userData['totalEmp'] != null &&
+              _userData['totalEmp'].toString().isNotEmpty) ...[
+            const Divider(),
+            Builder(
+              builder: (context) {
+                print('🎨 Rendering totalEmp widget with value: ${_userData['totalEmp']}');
+                return _buildInfoRow(
+                  Icons.groups_outlined,
+                  "Total Employees",
+                  _userData['totalEmp'].toString(),
+                );
+              },
+            ),
+          ],
           if (_userData['skills'] != null &&
               _userData['skills'].toString().isNotEmpty) ...[
             const Divider(),
@@ -506,7 +541,7 @@ class _ProfileScreenState extends State<ProfileScreen> with WidgetsBindingObserv
           if (_userData['bio'] != null &&
               _userData['bio'].toString().isNotEmpty) ...[
             const Divider(),
-            _buildInfoRow(Icons.description_outlined, "Bio", _userData['bio'].toString()),
+            _buildInfoRow(Icons.description_outlined, "About Company", _userData['bio'].toString()),
           ],
         ],
       ),

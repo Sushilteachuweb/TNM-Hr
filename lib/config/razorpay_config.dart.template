@@ -1,0 +1,24 @@
+/// Razorpay Configuration Template
+/// 
+/// Copy this file to 'razorpay_config.dart' and add your actual credentials.
+/// The actual config file is gitignored to protect sensitive information.
+
+class RazorpayConfig {
+  // Razorpay API Credentials
+  // Get these from: https://dashboard.razorpay.com/app/keys
+  static const String keyId = 'YOUR_RAZORPAY_KEY_ID';
+  static const String keySecret = 'YOUR_RAZORPAY_KEY_SECRET';
+  
+  // Company/App Information
+  static const String companyName = 'Naukri Mitra';
+  static const String brandColor = '#2563EB';
+  
+  // Environment
+  static const bool isLiveMode = true; // Set to true for production, false for test mode
+  
+  /// Get the appropriate key based on environment
+  static String get apiKey => keyId;
+  
+  /// Validate if credentials are configured
+  static bool get isConfigured => keyId.isNotEmpty && keySecret.isNotEmpty;
+}

@@ -23,6 +23,7 @@ class HrProfileApiService {
     String? experience,
     String? hrLocation,
     String? bio,
+    String? totalEmp,
     String? skills,
     File? profilePhoto,
   }) async {
@@ -51,6 +52,10 @@ class HrProfileApiService {
       }
       if (hrLocation != null) request.fields['hrLocation'] = hrLocation;
       if (bio != null) request.fields['bio'] = bio;
+      if (totalEmp != null && totalEmp.isNotEmpty) {
+        // Send totalEmp as string (can be range like "21-50" or numeric value)
+        request.fields['totalEmp'] = totalEmp;
+      }
       if (skills != null && skills.isNotEmpty) {
         request.fields['skills[0]'] = skills; // Based on Postman format
       }

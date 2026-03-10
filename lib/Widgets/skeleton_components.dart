@@ -52,24 +52,26 @@ class HomeScreenSkeleton extends StatelessWidget {
                   border: Border.all(color: AppColors.border),
                   boxShadow: [AppColors.cardShadow],
                 ),
-                padding: const EdgeInsets.all(12),
-                child: const Column(
+                padding: const EdgeInsets.all(10),
+                child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
+                  mainAxisSize: MainAxisSize.min,
+                  children: const [
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        SkeletonContainer(width: 24, height: 24, borderRadius: BorderRadius.all(Radius.circular(8))),
-                        SkeletonContainer(width: 16, height: 16, borderRadius: BorderRadius.all(Radius.circular(4))),
+                        SkeletonContainer(width: 20, height: 20, borderRadius: BorderRadius.all(Radius.circular(6))),
+                        SkeletonContainer(width: 14, height: 14, borderRadius: BorderRadius.all(Radius.circular(4))),
                       ],
                     ),
+                    SizedBox(height: 6),
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        SkeletonText(width: 40, height: 18),
+                        SkeletonText(width: 35, height: 14),
                         SizedBox(height: 2),
-                        SkeletonText(width: 60, height: 12),
+                        SkeletonText(width: 50, height: 10),
                       ],
                     ),
                   ],

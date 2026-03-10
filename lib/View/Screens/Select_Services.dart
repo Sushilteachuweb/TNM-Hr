@@ -83,15 +83,17 @@ class SelectServices extends StatelessWidget {
                     );
                   },
                 ),
-                // const SizedBox(height: 16),
-                // _buildServiceCard(
-                //   context: context,
-                //   icon: Icons.work_outline_rounded,
-                //   title: "I want a Job",
-                //   subtitle: "Find your dream job opportunity",
-                //   gradient: AppColors.successGradient,
-                //   onTap: () {},
-                // ),
+                const SizedBox(height: 16),
+                _buildServiceCard(
+                  context: context,
+                  icon: Icons.work_outline_rounded,
+                  title: "I want a Job",
+                  subtitle: "Find your dream job opportunity",
+                  gradient: AppColors.successGradient,
+                  onTap: () {
+                    _launchURL(context, 'https://play.google.com/store/apps/details?id=com.arp.naukrimitra.jobs&pcampaignid=web_share');
+                  },
+                ),
                 const Spacer(),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -101,7 +103,7 @@ class SelectServices extends StatelessWidget {
                       style: AppTextStyles.caption.copyWith(fontSize: 13),
                       children: [
                         const TextSpan(
-                          text: "By clicking on I want to Hire, you agree to our ",
+                          text: "By clicking on any option, you agree to our ",
                         ),
                         WidgetSpan(
                           child: GestureDetector(

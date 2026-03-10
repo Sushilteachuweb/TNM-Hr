@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../bottomNavBar/bottomNavBar.dart';
 import '../../core/app_colors.dart';
 import '../../core/app_text_styles.dart';
@@ -14,7 +15,7 @@ class DocumentSubmissionScreen extends StatefulWidget {
   final String fullName;
   final String email;
   final String companyName;
-  final int totalEmp;
+  final String totalEmp;
   final File? profileImage;
 
   const DocumentSubmissionScreen({
@@ -369,6 +370,8 @@ class _DocumentSubmissionScreenState extends State<DocumentSubmissionScreen> {
               _buildDocumentSection(),
               const SizedBox(height: 32),
               _buildSubmitButton(),
+              const SizedBox(height: 24),
+              _buildSupportSection(),
               const SizedBox(height: 20),
             ],
           ),
@@ -628,5 +631,57 @@ class _DocumentSubmissionScreenState extends State<DocumentSubmissionScreen> {
     );
   }
 
+  Widget _buildSupportSection() {
+    return Center(
+      child: RichText(
+        textAlign: TextAlign.center,
+        text: TextSpan(
+          style: AppTextStyles.body2.copyWith(
+            color: AppColors.textSecondary,
+          ),
+          children: [
+            const TextSpan(text: "Need help? Reach us at "),
+            WidgetSpan(
+              child: InkWell(
+                onTap: () async {
+                  final Uri phoneUri = Uri(scheme: 'tel', path: '01169268889');
+                  if (await canLaunchUrl(phoneUri)) {
+                    await launchUrl(phoneUri);
+                  }
+                },
+                child: Text(
+                  "01169268889",
+                  style: AppTextStyles.body2.copyWith(
+                    color: AppColors.primary,
+                    fontWeight: FontWeight.w600,
+                    decoration: TextDecoration.underline,
+                  ),
+                ),
+              ),
+            ),
+            const TextSpan(text: " or visit our "),
+            WidgetSpan(
+              child: InkWell(
+                onTap: () async {
+                  final Uri url = Uri.parse('https://www.thenaukrimitra.com/contactus');
+                  if (await canLaunchUrl(url)) {
+                    await launchUrl(url, mode: LaunchMode.externalApplication);
+                  }
+                },
+                child: Text(
+                  "support page",
+                  style: AppTextStyles.body2.copyWith(
+                    color: AppColors.primary,
+                    fontWeight: FontWeight.w600,
+                    decoration: TextDecoration.underline,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
 }

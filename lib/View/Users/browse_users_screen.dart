@@ -599,8 +599,19 @@ class _BrowseUsersScreenState extends State<BrowseUsersScreen> {
       return;
     }
 
-    String url = 'https://wa.me/$phone';
+    // Generate auto-message for candidate contact
+    String message = 'Hello, I am contacting from NaukriMitra HR App regarding job opportunities. Are you currently looking for new opportunities?';
+    
+    // URL encode the message (spaces become %20)
+    String encodedMessage = Uri.encodeComponent(message);
+    
+    // Create WhatsApp URL with pre-filled message
+    String url = 'https://wa.me/$phone?text=$encodedMessage';
     Uri whatsappUri = Uri.parse(url);
+
+    // Logging for debugging
+    print('Generated WhatsApp Message: $message');
+    print('Generated WhatsApp URL: $url');
 
     if (await canLaunchUrl(whatsappUri)) {
       await launchUrl(whatsappUri, mode: LaunchMode.externalApplication);
@@ -608,7 +619,7 @@ class _BrowseUsersScreenState extends State<BrowseUsersScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: const Text('Could not open WhatsApp'),
+            content: const Text('WhatsApp is not installed on your device'),
             backgroundColor: AppColors.error,
           ),
         );

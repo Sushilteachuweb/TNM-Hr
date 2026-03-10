@@ -660,18 +660,41 @@ class _ApplicantsState extends State<Applicants> {
   }
 
   void _messageApplicant(String phone) async {
-    String url = 'https://wa.me/$phone';
+    if (phone.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text("Phone number not available"),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      return;
+    }
+
+    // Generate auto-message with job title
+    String message = 'Hi! I am contacting from NaukriMitra HR App regarding the job "${widget.jobTitle}". Could you please provide more details?';
+    
+    // URL encode the message (spaces become %20)
+    String encodedMessage = Uri.encodeComponent(message);
+    
+    // Create WhatsApp URL with pre-filled message
+    String url = 'https://wa.me/$phone?text=$encodedMessage';
     Uri whatsappUri = Uri.parse(url);
+
+    // Logging for debugging
+    print('Generated WhatsApp Message: $message');
+    print('Generated WhatsApp URL: $url');
 
     if (await canLaunchUrl(whatsappUri)) {
       await launchUrl(whatsappUri, mode: LaunchMode.externalApplication);
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text("Could not open WhatsApp"),
-          backgroundColor: AppColors.error,
-        ),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text("WhatsApp is not installed on your device"),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
     }
   }
 

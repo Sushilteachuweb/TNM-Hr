@@ -342,7 +342,14 @@ class _JobScreenState extends State<JobScreen> {
                 color: AppColors.textSecondary,
               ),
               const SizedBox(width: 4),
-              Text(location, style: AppTextStyles.body2),
+              Expanded(
+                child: Text(
+                  location,
+                  style: AppTextStyles.body2,
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 6),

@@ -47,4 +47,14 @@ app.*.map.json
 # Keystore files - DO NOT COMMIT THESE
 *.jks
 *.keystore
+*.pem
+upload-keystore.jks
+upload_certificate.pem
 android/key.properties
+android/local.properties
+
+# Payment Gateway Configuration - DO NOT COMMIT
+lib/config/razorpay_config.dart
+
+# Google Maps API Configuration - DO NOT COMMIT
+android/app/src/main/AndroidManifest.xml

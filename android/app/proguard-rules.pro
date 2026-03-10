@@ -15,10 +15,27 @@
 # Application classes that will be serialized/deserialized over Gson
 -keep class com.techuweb.hrportal.** { *; }
 
-# Razorpay
+# Razorpay - Critical for live mode
 -keep class com.razorpay.** {*;}
 -keep class com.olacabs.** {*;}
 -keep class com.razorpay.RzpTokenReceiver
+-keepclassmembers class * {
+    @android.webkit.JavascriptInterface <methods>;
+}
+-keepattributes JavascriptInterface
+-keepattributes *Annotation*
+-dontwarn com.razorpay.**
+-keep class org.json.** { *; }
+
+# WebView
+-keep class android.webkit.** { *; }
+-keepclassmembers class * extends android.webkit.WebViewClient {
+    public void *(android.webkit.WebView, java.lang.String, android.graphics.Bitmap);
+    public boolean *(android.webkit.WebView, java.lang.String);
+}
+-keepclassmembers class * extends android.webkit.WebChromeClient {
+    public void *(android.webkit.WebView, java.lang.String);
+}
 
 # HTTP
 -keep class okhttp3.** { *; }

@@ -15,6 +15,7 @@ class UserStorage {
   static const String _locationKey = 'location';
   static const String _skillsKey = 'skills';
   static const String _bioKey = 'bio';
+  static const String _totalEmpKey = 'totalEmp';
   static const String _profileImageKey = 'profileImage';
   static const String _verificationDocumentKey = 'verificationDocument';
   static const String _profileCompletionSnackbarShownKey = 'profileCompletionSnackbarShown';
@@ -60,6 +61,7 @@ class UserStorage {
       'location': prefs.getString(_locationKey),
       'skills': prefs.getString(_skillsKey),
       'bio': prefs.getString(_bioKey),
+      'totalEmp': prefs.getString(_totalEmpKey),
       'profileImage': prefs.getString(_profileImageKey),
       'verificationDocument': prefs.getString(_verificationDocumentKey),
     };
@@ -89,6 +91,12 @@ class UserStorage {
     return prefs.getString(_phoneKey) ?? '';
   }
 
+  /// Get stored user email
+  static Future<String> getEmail() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_userEmailKey) ?? '';
+  }
+
   /// Check if user is existing user
   static Future<bool> isExistingUser() async {
     final prefs = await SharedPreferences.getInstance();
@@ -111,6 +119,7 @@ class UserStorage {
     String? location,
     String? skills,
     String? bio,
+    String? totalEmp,
     String? profileImage,
     String? verificationDocument,
   }) async {
@@ -126,6 +135,7 @@ class UserStorage {
     if (location != null) await prefs.setString(_locationKey, location);
     if (skills != null) await prefs.setString(_skillsKey, skills);
     if (bio != null) await prefs.setString(_bioKey, bio);
+    if (totalEmp != null) await prefs.setString(_totalEmpKey, totalEmp);
     if (profileImage != null) {
       await prefs.setString(_profileImageKey, profileImage);
     }

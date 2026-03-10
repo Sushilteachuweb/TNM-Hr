@@ -32,6 +32,17 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   late TextEditingController _locationController;
   late TextEditingController _skillsController;
   late TextEditingController _bioController;
+  String? _selectedTotalEmp;
+  
+  // Employee count options
+  final List<String> _employeeCountOptions = [
+    '1-10',
+    '11-20',
+    '21-50',
+    '51-100',
+    '101-200',
+    '201-500',
+  ];
   
   // Add a unique key for the Google Places widget
   final _locationKey = GlobalKey();
@@ -72,6 +83,40 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     _bioController = TextEditingController(
       text: widget.initialData['bio'] ?? '',
     );
+    
+    // Map old numeric values to new dropdown ranges
+    String? totalEmpValue = widget.initialData['totalEmp']?.toString();
+    if (totalEmpValue != null && totalEmpValue.isNotEmpty) {
+      print('📊 Edit Profile - totalEmp from storage: $totalEmpValue');
+      // Check if it's already in the correct format
+      if (_employeeCountOptions.contains(totalEmpValue)) {
+        _selectedTotalEmp = totalEmpValue;
+        print('✅ Edit Profile - totalEmp already in correct format: $_selectedTotalEmp');
+      } else {
+        // Try to parse as number and map to range
+        final numValue = int.tryParse(totalEmpValue);
+        if (numValue != null) {
+          _selectedTotalEmp = _mapNumberToRange(numValue);
+          print('🔄 Edit Profile - Mapped numeric value $numValue to range: $_selectedTotalEmp');
+        } else {
+          print('⚠️ Edit Profile - Could not parse totalEmp value: $totalEmpValue');
+        }
+      }
+    } else {
+      print('ℹ️ Edit Profile - No totalEmp value found in initial data');
+    }
+  }
+  
+  // Helper method to map old numeric values to dropdown ranges
+  String? _mapNumberToRange(int value) {
+    if (value >= 1 && value <= 10) return '1-10';
+    if (value >= 11 && value <= 20) return '11-20';
+    if (value >= 21 && value <= 50) return '21-50';
+    if (value >= 51 && value <= 100) return '51-100';
+    if (value >= 101 && value <= 200) return '101-200';
+    if (value >= 201 && value <= 500) return '201-500';
+    if (value > 500) return '201-500'; // Default to highest range
+    return null;
   }
 
   @override
@@ -134,6 +179,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           experience: _experienceController.text,
           hrLocation: _locationController.text,
           bio: _bioController.text,
+          totalEmp: _selectedTotalEmp,
           skills: _skillsController.text,
           profilePhoto: validatedImage, // Only pass validated image
         );
@@ -177,6 +223,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               location: updatedProfile['hrLocation']?.toString() ?? _locationController.text,
               skills: skillsStr,
               bio: updatedProfile['bio']?.toString() ?? _bioController.text,
+              totalEmp: updatedProfile['totalEmp']?.toString() ?? _selectedTotalEmp,
               profileImage: updatedProfile['profilePhoto']?.toString() ?? validatedImage?.path,
             );
           } else {
@@ -191,6 +238,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               location: _locationController.text,
               skills: _skillsController.text,
               bio: _bioController.text,
+              totalEmp: _selectedTotalEmp,
               profileImage: validatedImage?.path,
             );
           }
@@ -468,6 +516,40 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                               fit: BoxFit.cover,
                             ),
                           )
+                        : (widget.initialData['profileImage'] != null && 
+                           widget.initialData['profileImage'].toString().isNotEmpty)
+                        ? ClipOval(
+                            child: Image.network(
+                              widget.initialData['profileImage'],
+                              width: 50,
+                              height: 50,
+                              fit: BoxFit.cover,
+                              errorBuilder: (context, error, stackTrace) {
+                                return Icon(
+                                  Icons.person_add_rounded,
+                                  size: 50,
+                                  color: AppColors.primary,
+                                );
+                              },
+                              loadingBuilder: (context, child, loadingProgress) {
+                                if (loadingProgress == null) return child;
+                                return SizedBox(
+                                  width: 50,
+                                  height: 50,
+                                  child: Center(
+                                    child: CircularProgressIndicator(
+                                      value: loadingProgress.expectedTotalBytes != null
+                                          ? loadingProgress.cumulativeBytesLoaded /
+                                              loadingProgress.expectedTotalBytes!
+                                          : null,
+                                      strokeWidth: 2,
+                                      color: AppColors.primary,
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                          )
                         : Icon(
                             Icons.person_add_rounded,
                             size: 50,
@@ -559,6 +641,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 isNumeric: true,
               ),
               const SizedBox(height: 16),
+              _buildEmployeeCountDropdown(),
+              const SizedBox(height: 16),
               // Location - Google Places Autocomplete
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -646,9 +730,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               const SizedBox(height: 16),
               _buildTextField(
                 Icons.description_outlined,
-                "Bio",
+                "About Company",
                 _bioController,
-                "Enter your bio",
+                "Enter about company",
                 maxLines: 3,
               ),
               const SizedBox(height: 32),
@@ -760,6 +844,55 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         ),
         contentPadding: const EdgeInsets.all(16),
       ),
+    );
+  }
+
+  Widget _buildEmployeeCountDropdown() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          "Total Employees",
+          style: AppTextStyles.subtitle2.copyWith(
+            color: AppColors.textPrimary,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 8),
+        DropdownButtonFormField<String>(
+          value: _selectedTotalEmp,
+          decoration: InputDecoration(
+            hintText: "Select employee count",
+            prefixIcon: Icon(Icons.groups_outlined, color: AppColors.primary),
+            filled: true,
+            fillColor: AppColors.surface,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: AppColors.border),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: AppColors.border),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: AppColors.primary, width: 2),
+            ),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+          ),
+          items: _employeeCountOptions.map((String value) {
+            return DropdownMenuItem<String>(
+              value: value,
+              child: Text(value),
+            );
+          }).toList(),
+          onChanged: (String? newValue) {
+            setState(() {
+              _selectedTotalEmp = newValue;
+            });
+          },
+        ),
+      ],
     );
   }
 }

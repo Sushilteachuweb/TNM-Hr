@@ -35,8 +35,8 @@ android {
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
-        versionCode = 5
-        versionName = "1.0.3"
+        versionCode = 7
+        versionName = "1.0.5"
     }
 
     signingConfigs {
@@ -63,4 +63,9 @@ android {
 
 flutter {
     source = "../.."
+}
+
+dependencies {
+    // AppCompat required for Razorpay CheckoutActivity
+    implementation("androidx.appcompat:appcompat:1.6.1")
 }

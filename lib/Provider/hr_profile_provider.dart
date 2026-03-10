@@ -111,6 +111,7 @@ class HrProfileProvider with ChangeNotifier {
           location: _profileData['location']?.toString() ?? _profileData['officeAddress']?.toString() ?? _profileData['city']?.toString() ?? _profileData['hrLocation']?.toString(),
           skills: skillsStr,
           bio: _profileData['bio']?.toString(),
+          totalEmp: _profileData['totalEmp']?.toString(),
           profileImage: _profileData['profilePhoto']?.toString() ?? _profileData['profileImage']?.toString(),
         );
         

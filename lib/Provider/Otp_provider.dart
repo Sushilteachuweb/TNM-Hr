@@ -133,6 +133,7 @@ class OtpProvider with ChangeNotifier {
                 location: location,
                 skills: skillsStr,
                 bio: profileData['bio']?.toString(),
+                totalEmp: profileData['totalEmp']?.toString(),
                 profileImage: profileData['profilePhoto']?.toString() ?? profileData['profileImage']?.toString(),
               );
               

@@ -233,7 +233,7 @@ class AuthApiService {
     required String phone,
     required String companyName,
     required String email,
-    required int totalEmp,
+    required String totalEmp,
   }) async {
     try {
       print("📝 Calling Signup API: ${ApiConfig.signup}");
@@ -309,7 +309,7 @@ class AuthApiService {
     required String phone,
     required String companyName,
     required String email,
-    required int totalEmp,
+    required String totalEmp,
     required File verificationDocument,
     File? profilePhoto,
   }) async {
@@ -329,7 +329,7 @@ class AuthApiService {
       request.fields['phone'] = phone;
       request.fields['email'] = email;
       request.fields['companyName'] = companyName;
-      request.fields['totalEmp'] = totalEmp.toString();
+      request.fields['totalEmp'] = totalEmp;
 
       // Add verification document with explicit content type
       String fileName = verificationDocument.path.split('/').last;

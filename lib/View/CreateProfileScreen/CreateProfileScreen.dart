@@ -18,7 +18,17 @@ class _CreateProfileScreenState extends State<CreateProfileScreen> {
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
   final _companyController = TextEditingController();
-  final _employeeSizeController = TextEditingController();
+  String? _selectedEmployeeCount;
+
+  // Employee count options
+  final List<String> _employeeCountOptions = [
+    '1-10',
+    '11-20',
+    '21-50',
+    '51-100',
+    '101-200',
+    '201-500',
+  ];
 
   File? _selectedImage;
   final ImagePicker _picker = ImagePicker();
@@ -28,12 +38,21 @@ class _CreateProfileScreenState extends State<CreateProfileScreen> {
     _nameController.dispose();
     _emailController.dispose();
     _companyController.dispose();
-    _employeeSizeController.dispose();
     super.dispose();
   }
 
   void _submitProfile() async {
     if (_formKey.currentState!.validate()) {
+      if (_selectedEmployeeCount == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Please select employee count'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+        return;
+      }
+      
       // Navigate to document submission screen
       Navigator.push(
         context,
@@ -42,7 +61,7 @@ class _CreateProfileScreenState extends State<CreateProfileScreen> {
             fullName: _nameController.text,
             email: _emailController.text,
             companyName: _companyController.text,
-            totalEmp: int.parse(_employeeSizeController.text),
+            totalEmp: _selectedEmployeeCount!,
             profileImage: _selectedImage,
           ),
         ),
@@ -480,22 +499,7 @@ class _CreateProfileScreenState extends State<CreateProfileScreen> {
             },
           ),
           const SizedBox(height: 16),
-          _buildTextField(
-            controller: _employeeSizeController,
-            label: "Employee Size",
-            hint: "Enter number of employees",
-            icon: Icons.groups_outlined,
-            keyboardType: TextInputType.number,
-            inputFormatters: [
-              FilteringTextInputFormatter.digitsOnly,
-            ],
-            validator: (value) {
-              if (value == null || value.isEmpty) {
-                return 'Please enter employee size';
-              }
-              return null;
-            },
-          ),
+          _buildEmployeeCountDropdown(),
         ],
       ),
     );
@@ -597,6 +601,61 @@ class _CreateProfileScreenState extends State<CreateProfileScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildEmployeeCountDropdown() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          "Employee Size",
+          style: AppTextStyles.subtitle2.copyWith(
+            color: AppColors.textPrimary,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 8),
+        DropdownButtonFormField<String>(
+          value: _selectedEmployeeCount,
+          decoration: InputDecoration(
+            hintText: "Select employee count",
+            prefixIcon: Icon(Icons.groups_outlined, color: AppColors.primary),
+            filled: true,
+            fillColor: AppColors.surface,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: AppColors.border),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: AppColors.border),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: AppColors.primary, width: 2),
+            ),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+          ),
+          items: _employeeCountOptions.map((String value) {
+            return DropdownMenuItem<String>(
+              value: value,
+              child: Text(value),
+            );
+          }).toList(),
+          onChanged: (String? newValue) {
+            setState(() {
+              _selectedEmployeeCount = newValue;
+            });
+          },
+          validator: (value) {
+            if (value == null || value.isEmpty) {
+              return 'Please select employee count';
+            }
+            return null;
+          },
+        ),
+      ],
     );
   }
 }

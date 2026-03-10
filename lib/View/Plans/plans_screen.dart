@@ -5,6 +5,7 @@ import 'dart:developer' as developer;
 import 'dart:convert';
 import '../../core/app_colors.dart';
 import '../../core/app_text_styles.dart';
+import '../../config/razorpay_config.dart';
 import '../../Provider/plan_provider.dart';
 import '../../Provider/billing_provider.dart';
 import '../../Provider/credit_provider.dart';
@@ -330,8 +331,11 @@ class _PlansScreenState extends State<PlansScreen> with SingleTickerProviderStat
     final startTime = DateTime.now();
     
     try {
-      // Get mobile number from UserStorage (use as userId for payment)
+      // Get user data from UserStorage
       final mobileNumber = await UserStorage.getPhone();
+      final userEmail = await UserStorage.getEmail();
+      final loginData = await UserStorage.getLoginData();
+      final userName = loginData['userName'] ?? 'Customer';
       
       if (mobileNumber.isEmpty) {
         developer.log(
@@ -356,6 +360,12 @@ class _PlansScreenState extends State<PlansScreen> with SingleTickerProviderStat
         return;
       }
       
+      // Ensure mobile number is 10 digits without country code
+      String cleanMobileNumber = mobileNumber.replaceAll('+91', '').replaceAll(' ', '').trim();
+      if (cleanMobileNumber.length > 10) {
+        cleanMobileNumber = cleanMobileNumber.substring(cleanMobileNumber.length - 10);
+      }
+      
       developer.log(
         json.encode({
           'timestamp': DateTime.now().toIso8601String(),
@@ -363,7 +373,7 @@ class _PlansScreenState extends State<PlansScreen> with SingleTickerProviderStat
           'planId': plan.id,
           'planName': plan.planName,
           'amount': plan.pricePerMonth,
-          'mobileNumber': mobileNumber,
+          'mobileNumber': cleanMobileNumber,
         }),
         name: 'PaymentFlow',
       );
@@ -386,8 +396,9 @@ class _PlansScreenState extends State<PlansScreen> with SingleTickerProviderStat
             'event': 'order_created_successfully',
             'orderId': order['id'],
             'amount': order['amount'],
+            'currency': order['currency'],
             'planId': plan.id,
-            'mobileNumber': mobileNumber,
+            'mobileNumber': cleanMobileNumber,
             'orderCreationTime': '${orderCreationTime}ms',
           }),
           name: 'PaymentFlow',
@@ -410,18 +421,40 @@ class _PlansScreenState extends State<PlansScreen> with SingleTickerProviderStat
         );
         
         // Start Razorpay payment with the order details
+        // Match exactly with website implementation
         var options = {
-          'key': 'rzp_test_RSsp7FsCxepW8t', // Updated Razorpay key
-          'amount': order['amount'], // Amount in paise
-          'name': 'Naukri Mitra',
+          'key': RazorpayConfig.apiKey,
+          'amount': order['amount'],
+          'currency': order['currency'] ?? 'INR',
+          'name': RazorpayConfig.companyName,
           'description': plan.planName,
           'order_id': order['id'],
           'prefill': {
-            'contact': mobileNumber, // Use actual mobile number
-            'email': 'test@example.com' // Should come from user profile
+            'name': userName,
+            'contact': cleanMobileNumber,
+            'email': userEmail.isNotEmpty ? userEmail : 'customer@thenaukrimitra.com'
           },
           'theme': {
-            'color': '#2563EB'
+            'color': RazorpayConfig.brandColor
+          },
+          'retry': {
+            'enabled': true,
+            'max_count': 3
+          },
+          'timeout': 600, // 10 minutes timeout for live mode
+          'modal': {
+            'confirm_close': true,
+            'ondismiss': null, // Explicitly set to null to avoid callback issues
+          },
+          'config': {
+            'display': {
+              'hide': [
+                {'method': 'paylater'}
+              ],
+              'preferences': {
+                'show_default_blocks': true
+              }
+            }
           }
         };
         
@@ -431,14 +464,20 @@ class _PlansScreenState extends State<PlansScreen> with SingleTickerProviderStat
             'event': 'razorpay_dialog_opening',
             'orderId': order['id'],
             'amount': order['amount'],
-            'mobileNumber': mobileNumber,
+            'currency': order['currency'],
+            'mobileNumber': cleanMobileNumber,
             'razorpayOptions': {
               'key': options['key'],
               'amount': options['amount'],
+              'currency': options['currency'],
               'order_id': options['order_id'],
               'name': options['name'],
               'description': options['description'],
-              'contact': options['prefill']['contact'],
+              'prefill': {
+                'name': options['prefill']['name'],
+                'contact': options['prefill']['contact'],
+                'email': options['prefill']['email'],
+              }
             }
           }),
           name: 'PaymentFlow',

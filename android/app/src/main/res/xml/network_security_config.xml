@@ -1,6 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
 <network-security-config>
+    <!-- Allow all HTTPS connections -->
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+    
+    <!-- Allow Razorpay domains - Critical for live mode -->
     <domain-config cleartextTrafficPermitted="false">
-        <domain includeSubdomains="true">your-api-domain.com</domain>
+        <domain includeSubdomains="true">razorpay.com</domain>
+        <domain includeSubdomains="true">checkout-static-next.razorpay.com</domain>
+        <domain includeSubdomains="true">api.razorpay.com</domain>
+        <domain includeSubdomains="true">lumberjack.razorpay.com</domain>
+        <domain includeSubdomains="true">checkout.razorpay.com</domain>
+        <domain includeSubdomains="true">thenaukrimitra.com</domain>
     </domain-config>
 </network-security-config>
