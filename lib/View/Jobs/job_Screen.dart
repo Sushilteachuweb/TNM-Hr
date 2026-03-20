@@ -829,7 +829,7 @@ class _JobScreenState extends State<JobScreen> {
       
       scaffoldMessenger.showSnackBar(
         SnackBar(
-          content: Text('An error occurred: ${e.toString()}'),
+          content: const Text('Unable to publish job. Please try again.'),
           backgroundColor: AppColors.error,
         ),
       );
@@ -954,7 +954,7 @@ class _JobScreenState extends State<JobScreen> {
       
       scaffoldMessenger.showSnackBar(
         SnackBar(
-          content: Text('An error occurred: ${e.toString()}'),
+          content: const Text('Unable to delete job. Please try again.'),
           backgroundColor: AppColors.error,
         ),
       );

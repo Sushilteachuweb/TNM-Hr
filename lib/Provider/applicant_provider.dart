@@ -32,6 +32,10 @@ class ApplicantProvider with ChangeNotifier {
         _errorMessage = 'Server configuration issue. Please contact support or try again later.';
       } else if (errorMessage.contains('Server is not responding')) {
         _errorMessage = 'Unable to connect to server. Please check your internet connection.';
+      } else if (errorMessage.contains('http') || errorMessage.contains('://') || 
+                 errorMessage.contains('Exception') || errorMessage.contains('errno') ||
+                 errorMessage.contains('SocketException') || errorMessage.contains('ClientException')) {
+        _errorMessage = 'Unable to load applicants. Please check your connection and try again.';
       } else {
         _errorMessage = errorMessage;
       }

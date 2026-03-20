@@ -43,12 +43,20 @@ class UserProvider with ChangeNotifier {
       if (result['success'] == true) {
         _users = result['data']['users'] ?? result['data'] ?? [];
         if (skills == null && city == null && experience == null && keyword == null) {
-          _hasLoadedOnce = true; // Mark as loaded only for initial load without filters
+          _hasLoadedOnce = true;
         }
       } else {
-        _errorMessage = result['message'] ?? 'Failed to fetch users';
+        final rawMsg = result['message'] ?? '';
+        // Sanitize: never show technical/internal error details to users
+        if (rawMsg.contains('http') || rawMsg.contains('://') ||
+            rawMsg.contains('Exception') || rawMsg.contains('errno') ||
+            rawMsg.contains('SocketException') || rawMsg.contains('ClientException')) {
+          _errorMessage = 'Unable to load candidates. Please check your connection and try again.';
+        } else {
+          _errorMessage = rawMsg.isNotEmpty ? rawMsg : 'Unable to load candidates. Please try again.';
+        }
         if (skills == null && city == null && experience == null && keyword == null) {
-          _hasLoadedOnce = true; // Mark as loaded even on error to prevent infinite skeleton
+          _hasLoadedOnce = true;
         }
       }
     } catch (e) {

@@ -53,7 +53,7 @@ class _DocumentSubmissionScreenState extends State<DocumentSubmissionScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text("Unable to select document: ${e.message}"),
+            content: const Text("Unable to select document. Please try again."),
             backgroundColor: AppColors.error,
           ),
         );
@@ -88,7 +88,7 @@ class _DocumentSubmissionScreenState extends State<DocumentSubmissionScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text("Unable to select image: ${e.message}"),
+            content: const Text("Unable to select image. Please try again."),
             backgroundColor: AppColors.error,
           ),
         );

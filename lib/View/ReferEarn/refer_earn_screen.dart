@@ -1057,7 +1057,7 @@ Get credits to view candidate profiles and contact details.
         print('Share error: $error');
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to share: $error'),
+            content: const Text('Unable to share. Please try again.'),
             backgroundColor: AppColors.error,
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(

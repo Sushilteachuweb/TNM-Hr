@@ -41,7 +41,7 @@ class PaymentHistoryApiService {
           print("❌ API returned success: false");
           return {
             'success': false,
-            'message': responseData['message'] ?? 'Failed to fetch payment history',
+            'message': 'Unable to load payment history. Please try again.',
             'payments': [],
             'total': 0
           };
@@ -50,7 +50,7 @@ class PaymentHistoryApiService {
         print("❌ HTTP Error: ${response.statusCode}");
         return {
           'success': false,
-          'message': 'HTTP Error: ${response.statusCode}',
+          'message': 'Unable to load payment history. Please try again.',
           'payments': [],
           'total': 0
         };
@@ -59,7 +59,7 @@ class PaymentHistoryApiService {
       print("💥 Exception in fetchPaymentHistory: $e");
       return {
         'success': false,
-        'message': 'Network error: $e',
+        'message': 'Unable to load payment history. Please check your connection and try again.',
         'payments': [],
         'total': 0
       };
@@ -96,7 +96,7 @@ class PaymentHistoryApiService {
           print("❌ API returned success: false");
           return {
             'success': false,
-            'message': responseData['message'] ?? 'Failed to fetch payment details',
+            'message': 'Unable to load payment details. Please try again.',
             'payment': null
           };
         }
@@ -104,7 +104,7 @@ class PaymentHistoryApiService {
         print("❌ HTTP Error: ${response.statusCode}");
         return {
           'success': false,
-          'message': 'HTTP Error: ${response.statusCode}',
+          'message': 'Unable to load payment details. Please try again.',
           'payment': null
         };
       }
@@ -112,7 +112,7 @@ class PaymentHistoryApiService {
       print("💥 Exception in fetchPaymentDetails: $e");
       return {
         'success': false,
-        'message': 'Network error: $e',
+        'message': 'Unable to load payment details. Please check your connection and try again.',
         'payment': null
       };
     }

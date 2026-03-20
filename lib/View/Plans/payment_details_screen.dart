@@ -91,7 +91,7 @@ class _PaymentDetailsScreenState extends State<PaymentDetailsScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Download failed: ${e.toString().replaceAll('Exception: ', '')}'),
+          content: const Text('Unable to download invoice. Please try again.'),
           backgroundColor: AppColors.error,
           duration: const Duration(seconds: 3),
         ),

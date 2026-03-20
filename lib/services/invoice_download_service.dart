@@ -29,7 +29,7 @@ class InvoiceDownloadService {
     final response = await http.get(Uri.parse(url), headers: headers);
 
     if (response.statusCode != 200) {
-      throw Exception('Failed to download invoice (HTTP ${response.statusCode})');
+      throw Exception('Unable to download invoice. Please try again.');
     }
 
     final bytes = response.bodyBytes;
@@ -47,7 +47,7 @@ class InvoiceDownloadService {
   static Future<void> openFile(String filePath) async {
     final result = await OpenFile.open(filePath);
     if (result.type != ResultType.done) {
-      throw Exception('Could not open file: ${result.message}');
+      throw Exception('Could not open the file. Please try again.');
     }
   }
 

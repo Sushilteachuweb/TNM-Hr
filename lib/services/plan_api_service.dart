@@ -42,7 +42,7 @@ class PlanApiService {
           print("❌ API returned success: false");
           return {
             'success': false,
-            'message': responseData['message'] ?? 'Failed to fetch plans',
+            'message': 'Unable to load plans. Please try again.',
             'data': []
           };
         }
@@ -50,7 +50,7 @@ class PlanApiService {
         print("❌ HTTP Error: ${response.statusCode}");
         return {
           'success': false,
-          'message': 'HTTP Error: ${response.statusCode}',
+          'message': 'Unable to load plans. Please try again.',
           'data': []
         };
       }
@@ -58,7 +58,7 @@ class PlanApiService {
       print("💥 Exception in fetchPlans: $e");
       return {
         'success': false,
-        'message': 'Network error: $e',
+        'message': 'Unable to load plans. Please check your connection and try again.',
         'data': []
       };
     }
@@ -113,7 +113,7 @@ class PlanApiService {
           print("❌ API returned success: false");
           return {
             'success': false,
-            'message': responseData['message'] ?? 'Failed to create order',
+            'message': responseData['message'] ?? 'Unable to process your order. Please try again.',
             'order': null
           };
         }
@@ -122,7 +122,7 @@ class PlanApiService {
         print("❌ Response Body: ${response.body}");
         return {
           'success': false,
-          'message': 'HTTP Error: ${response.statusCode}',
+          'message': 'Unable to process your order. Please try again.',
           'order': null
         };
       }
@@ -130,7 +130,7 @@ class PlanApiService {
       print("💥 Exception in buyPlan: $e");
       return {
         'success': false,
-        'message': 'Network error: $e',
+        'message': 'Unable to process your order. Please check your connection and try again.',
         'order': null
       };
     }
@@ -198,7 +198,7 @@ class PlanApiService {
           print("❌ API returned success: false");
           return {
             'success': false,
-            'message': responseData['message'] ?? 'Failed to fetch active plan',
+            'message': 'Unable to load your plan. Please try again.',
             'data': null
           };
         }
@@ -206,7 +206,7 @@ class PlanApiService {
         print("❌ HTTP Error: ${response.statusCode}");
         return {
           'success': false,
-          'message': 'HTTP Error: ${response.statusCode}',
+          'message': 'Unable to load your plan. Please try again.',
           'data': null
         };
       }
@@ -214,7 +214,7 @@ class PlanApiService {
       print("💥 Exception in fetchActivePlan: $e");
       return {
         'success': false,
-        'message': 'Network error: $e',
+        'message': 'Unable to load your plan. Please check your connection and try again.',
         'data': null
       };
     }
