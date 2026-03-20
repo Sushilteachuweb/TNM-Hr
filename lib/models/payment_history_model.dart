@@ -14,6 +14,7 @@ class PaymentHistory {
   final DateTime updatedAt;
   final DateTime? validFrom;
   final DateTime? validUntil;
+  final String? invoiceUrl;
 
   PaymentHistory({
     required this.id,
@@ -29,6 +30,7 @@ class PaymentHistory {
     required this.updatedAt,
     this.validFrom,
     this.validUntil,
+    this.invoiceUrl,
   });
 
   factory PaymentHistory.fromJson(Map<String, dynamic> json) {
@@ -46,6 +48,7 @@ class PaymentHistory {
       updatedAt: DateTime.parse(json['updatedAt'] ?? DateTime.now().toIso8601String()).toLocal(),
       validFrom: json['validFrom'] != null ? DateTime.parse(json['validFrom']).toLocal() : null,
       validUntil: json['validUntil'] != null ? DateTime.parse(json['validUntil']).toLocal() : null,
+      invoiceUrl: json['invoiceUrl'],
     );
   }
 
@@ -64,6 +67,7 @@ class PaymentHistory {
       'updatedAt': updatedAt.toIso8601String(),
       'validFrom': validFrom?.toIso8601String(),
       'validUntil': validUntil?.toIso8601String(),
+      'invoiceUrl': invoiceUrl,
     };
   }
 

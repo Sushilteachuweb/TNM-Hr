@@ -19,6 +19,7 @@ class UserStorage {
   static const String _profileImageKey = 'profileImage';
   static const String _verificationDocumentKey = 'verificationDocument';
   static const String _profileCompletionSnackbarShownKey = 'profileCompletionSnackbarShown';
+  static const String _isProfileCompleteKey = 'isProfileComplete';
 
   /// Save login data after successful authentication
   static Future<void> saveLoginData({
@@ -154,5 +155,17 @@ class UserStorage {
   static Future<void> markProfileCompletionSnackbarAsShown() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_profileCompletionSnackbarShownKey, true);
+  }
+
+  /// Check if profile creation has been fully completed
+  static Future<bool> isProfileComplete() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_isProfileCompleteKey) ?? false;
+  }
+
+  /// Mark profile as fully completed
+  static Future<void> setProfileComplete(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_isProfileCompleteKey, value);
   }
 }

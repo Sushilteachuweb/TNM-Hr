@@ -26,7 +26,7 @@ class JobFormProvider with ChangeNotifier {
   String companyName = "";
   String jobTitle = "";
   String jobCategory = "";
-  String jobType = "Full Time"; // Full Time, Part Time, Both (Full + Part Time)
+  String jobType = "Full Time"; // Full Time, Part Time, Both (Full - Part Time)
   
   // Salary Details
   String salaryType = "Fixed Only"; // Fixed Only, Fixed + Incentive, Incentive Only
@@ -40,6 +40,7 @@ class JobFormProvider with ChangeNotifier {
   String minExperience = "0";
   String maxExperience = "0";
   String jobDescription = "";
+  String jobDescriptionDelta = ""; // Delta JSON for re-editing
   
   // Preferred Requirements
   int minAge = 18;
@@ -142,8 +143,11 @@ class JobFormProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  void setJobDescription(String value) {
+  void setJobDescription(String value, {String? delta}) {
     jobDescription = value;
+    if (delta != null) {
+      jobDescriptionDelta = delta;
+    }
     notifyListeners();
   }
 
@@ -335,13 +339,189 @@ class JobFormProvider with ChangeNotifier {
     notifyListeners();
   }
 
+  // Pre-fill form from existing job data (for edit flow)
+  void prefillFromJob(Map<String, dynamic> job) {
+    Map<String, dynamic>? _m(dynamic v) => v is Map<String, dynamic> ? v : null;
+    List<dynamic>? _l(dynamic v) => v is List ? v : null;
+
+    final salaryRange = _m(job['salaryRange']);
+    final locationDetails = _m(job['locationDetails']);
+    final candidateReq = _m(job['candidateRequirements']);
+    final employmentDetails = _m(job['employmentDetails']);
+    final jobTimingMap = _m(job['jobTiming']);
+    final ageRange = _m(candidateReq?['ageRange']);
+    final coordinates = _l(locationDetails?['coordinates']);
+
+    // PAGE 1
+    companyName = job['companyName'] ?? companyName;
+    jobTitle = job['title'] ?? '';
+    jobCategory = job['jobCategory'] ?? '';
+
+    // Map API jobType back to UI value
+    final rawJobType = _m(employmentDetails)?['jobType'] ?? job['jobType'] ?? 'Full Time';
+    const jobTypeApiToUi = {
+      'Full Time': 'Full Time',
+      'Part Time': 'Part Time',
+      'Both (Full - Part Time)': 'Both (Full - Part Time)',
+      // legacy values
+      'Both': 'Both (Full - Part Time)',
+      'Both (Full + Part Time)': 'Both (Full - Part Time)',
+    };
+    jobType = jobTypeApiToUi[rawJobType] ?? rawJobType;
+
+    // Salary
+    final rawSalaryType = salaryRange?['salaryType'] ?? job['salaryType'] ?? 'Fixed Only';
+    salaryType = rawSalaryType;
+    minSalary = salaryRange?['min']?.toString() ?? job['minSalary']?.toString() ?? '';
+    maxSalary = salaryRange?['max']?.toString() ?? job['maxSalary']?.toString() ?? '';
+
+    // Candidate requirements
+    final rawEdu = candidateReq?['minimumEducation'] ?? job['minimumEducation'] ?? '10th or Below 10th';
+    // Map API education back to UI value
+    const eduApiToUi = {
+      '10th Pass': '10th or Below 10th',
+      '12th Pass': '12th Pass',
+      'Graduate': 'Graduate',
+      "Bachelor's Degree": 'Graduate',
+      'Post Graduate': 'Post Graduate',
+      'Diploma': 'Diploma',
+    };
+    minimumEducation = eduApiToUi[rawEdu] ?? rawEdu;
+
+    // English level
+    final rawEnglish = candidateReq?['englishLevel'] ?? job['englishLevel'] ?? '';
+    const englishApiToUi = {
+      'No English': 'No English',
+      'Good English': 'Good English',
+      'Fluent English': 'Fluent English',
+      'beginner': 'No English',
+      'intermediate': 'Good English',
+      'advanced': 'Fluent English',
+      'fluent': 'Fluent English',
+    };
+    englishLevel = englishApiToUi[rawEnglish] ?? rawEnglish;
+
+    // Experience
+    final rawExp = candidateReq?['totalExperience'] ?? job['totalExperience'] ?? 'Any';
+    const expApiToUi = {
+      'Any': 'Any',
+      'Fresher': 'Fresher Only',
+      'Experience': 'Experienced Only',
+    };
+    totalExperience = expApiToUi[rawExp] ?? 'Any';
+
+    jobDescription = job['jobDescription'] ?? job['description'] ?? '';
+    jobDescriptionDelta = '';
+
+    // Age
+    minAge = ageRange?['min'] ?? job['minAge'] ?? 18;
+    maxAge = ageRange?['max'] ?? job['maxAge'] ?? 50;
+
+    // Preferred location
+    preferredLocation = locationDetails?['preferredLocation'] ?? job['preferredLocation'] ?? job['jobLocation'] ?? '';
+    preferredCity = '';
+    preferredState = '';
+    if (preferredLocation.isNotEmpty) {
+      final parts = preferredLocation.split(',').map((e) => e.trim()).toList();
+      if (parts.length >= 2) {
+        preferredCity = parts[0];
+        preferredState = parts[1];
+      }
+    }
+
+    // Coordinates
+    if (coordinates != null && coordinates.length >= 2) {
+      preferredCoordinates = [
+        (coordinates[0] as num).toDouble(),
+        (coordinates[1] as num).toDouble(),
+      ];
+    }
+
+    // Gender
+    final rawGender = candidateReq?['gender'] ?? job['gender'] ?? 'Both genders allowed';
+    const genderApiToUi = {
+      'Both genders allowed': 'Both genders allowed',
+      'Male only': 'Male only',
+      'Female only': 'Female only',
+    };
+    gender = genderApiToUi[rawGender] ?? 'Both genders allowed';
+
+    // PAGE 2
+    isWalkInInterview = _m(employmentDetails)?['isWalkInInterview'] ?? job['isWalkInInterview'] ?? true;
+    totalOpenings = _m(employmentDetails)?['openings'] ?? job['openings'] ?? 1;
+
+    final rawCommPref = job['communicationPreference'] ?? 'Yes, to myself';
+    // Support both old API format (phone/none) and new full string format
+    if (rawCommPref == 'phone,whatsapp') {
+      communicationPreference = 'Yes, to other recruiter';
+    } else if (rawCommPref == 'none') {
+      communicationPreference = 'No, I will contact candidates first';
+    } else if (rawCommPref == 'phone') {
+      communicationPreference = 'Yes, to myself';
+    } else {
+      // New format - use as-is if it matches known values
+      const validPrefs = [
+        'Yes, to myself',
+        'Yes, to other recruiter',
+        'No, I will contact candidates first',
+      ];
+      communicationPreference = validPrefs.contains(rawCommPref)
+          ? rawCommPref
+          : 'Yes, to myself';
+    }
+
+    // Work location
+    final rawWorkLoc = locationDetails?['workLocation'] ?? job['workLocation'] ?? '';
+    const workLocApiToUi = {
+      'Work From Home': 'Work From Home',
+      'Work From Office': 'Work From Office',
+      'Field Job': 'Field Job',
+    };
+    workLocationType = workLocApiToUi[rawWorkLoc] ?? rawWorkLoc;
+
+    officeAddress = locationDetails?['officeAddress'] ?? job['officeAddress'] ?? '';
+
+    // Perks
+    final perks = job['additionalPerks'];
+    additionalPerks = perks is List ? List<String>.from(perks) : [];
+
+    // Documents — flatten any comma-joined strings inside the list
+    final docs = job['documentsRequired'] ?? job['documents'];
+    if (docs is List) {
+      documentsRequired = docs
+          .expand((e) => e.toString().split(',').map((s) => s.trim()))
+          .where((s) => s.isNotEmpty)
+          .toList();
+    } else if (docs is String) {
+      documentsRequired = docs.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
+    } else {
+      documentsRequired = [];
+    }
+
+    // Working days
+    final rawDays = jobTimingMap?['workingDays'] ?? job['workingDays'] ?? 'Monday-Friday';
+    const daysApiToUi = {
+      'monday-friday': 'Monday-Friday',
+      'monday-saturday': 'Monday-Saturday',
+      'others': 'Others',
+      'Monday-Friday': 'Monday-Friday',
+      'Monday-Saturday': 'Monday-Saturday',
+      'Others': 'Others',
+    };
+    workingDays = daysApiToUi[rawDays] ?? 'Monday-Friday';
+
+    jobTiming = jobTimingMap?['timing'] ?? (job['jobTiming'] is String ? job['jobTiming'] : '') ?? '9:30am - 6:00pm';
+
+    notifyListeners();
+  }
+
   // Reset form data
   void resetForm() {
     // PAGE 1: Job Basic Details & Requirements
     companyName = "";
     jobTitle = "";
     jobCategory = "";
-    jobType = "Full Time";
+    jobType = "Full Time"; // Full Time, Part Time, Both (Full - Part Time)
     salaryType = "Fixed Only";
     minSalary = "";
     maxSalary = "";
@@ -455,14 +635,15 @@ class JobFormProvider with ChangeNotifier {
 
   // Validation methods
   bool isPage1Valid() {
+    final salaryValid = salaryType == 'Incentive Only' ||
+        (minSalary.isNotEmpty && maxSalary.isNotEmpty);
     return companyName.isNotEmpty &&
            jobTitle.isNotEmpty &&
            jobCategory.isNotEmpty &&
            jobType.isNotEmpty &&
-           minSalary.isNotEmpty &&
-           maxSalary.isNotEmpty &&
+           salaryValid &&
            minimumEducation.isNotEmpty &&
-           preferredLocation.isNotEmpty && // Changed from checking state and city separately
+           preferredLocation.isNotEmpty &&
            jobDescription.isNotEmpty;
   }
 
@@ -476,11 +657,10 @@ class JobFormProvider with ChangeNotifier {
 
   // Helper method to convert UI values to API format
   String _convertJobType(String uiValue) {
-    // Use exact values that work in the existing create job screen
     final Map<String, String> jobTypeMap = {
       'Full Time': 'Full Time',
       'Part Time': 'Part Time',
-      'Both (Full + Part Time)': 'Both',
+      'Both (Full - Part Time)': 'Both (Full - Part Time)',
     };
     return jobTypeMap[uiValue] ?? 'Full Time';
   }
@@ -579,15 +759,10 @@ class JobFormProvider with ChangeNotifier {
       experienceString = '$minExperience-$maxExperience years';
     }
 
-    // Convert communication preference to API format
-    String apiCommunicationPreference = 'phone';
-    if (communicationPreference == "Yes, to myself") {
-      apiCommunicationPreference = 'phone';
-    } else if (communicationPreference == "Yes, to other recruiter") {
-      apiCommunicationPreference = 'phone,whatsapp';
-    } else {
-      apiCommunicationPreference = 'none';
-    }
+    // Convert communication preference to API format (send full string value)
+    String apiCommunicationPreference = communicationPreference.isNotEmpty
+        ? communicationPreference
+        : 'Yes, to myself';
 
     // Ensure hrPhone is not empty
     String finalHrPhone = hrPhone.isNotEmpty ? hrPhone : "1234567890"; // Fallback phone
@@ -630,7 +805,7 @@ class JobFormProvider with ChangeNotifier {
       'jobType': apiJobType,
       'planType': 'basic',
       'salaryType': apiSalaryType,
-      'salaryRange': {
+      if (apiSalaryType != 'Incentive Only') 'salaryRange': {
         'min': int.tryParse(minSalary.replaceAll(RegExp(r'[^\d]'), '')) ?? 0,
         'max': int.tryParse(maxSalary.replaceAll(RegExp(r'[^\d]'), '')) ?? 0,
       },
@@ -650,7 +825,9 @@ class JobFormProvider with ChangeNotifier {
       'openings': totalOpenings,
       'isWalkInInterview': isWalkInInterview,
       'additionalPerks': additionalPerks,
-      'documents': documentsRequired.isNotEmpty ? documentsRequired : ['Aadhar Card'],
+      'documents': documentsRequired.isNotEmpty
+          ? documentsRequired
+          : ['Aadhar Card'],
       'communicationPreference': apiCommunicationPreference,
       'workingDays': apiWorkingDays,
       'jobTiming': jobTiming,

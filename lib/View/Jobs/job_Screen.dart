@@ -6,8 +6,7 @@ import '../../Provider/job_provider.dart';
 import '../../services/job_creation_service.dart';
 import '../bottomNavBar/bottomNavBar.dart';
 import 'Applicants/applicants.dart';
-import 'create_job_screen.dart';
-import 'edit_job_screen.dart';
+import 'EditJob/edit_job_basic_details_page.dart';
 import 'job_details_screen.dart';
 import '../../widgets/skeleton_components.dart';
 
@@ -183,19 +182,20 @@ class _JobScreenState extends State<JobScreen> {
     final jobCounts = jobProvider.jobCounts;
     final draftCount = jobProvider.getDraftJobs().length;
     
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 20),
-      padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(
-        color: AppColors.surfaceLight,
-        borderRadius: BorderRadius.circular(12),
-      ),
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      padding: const EdgeInsets.symmetric(horizontal: 20),
       child: Row(
         children: [
           _buildTab("Draft", draftCount.toString()),
+          const SizedBox(width: 8),
           _buildTab("Active", jobCounts['active']?.toString() ?? "0"),
+          const SizedBox(width: 8),
           _buildTab("Pending", jobCounts['pending']?.toString() ?? "0"),
+          const SizedBox(width: 8),
           _buildTab("Closed", jobCounts['closed']?.toString() ?? "0"),
+          const SizedBox(width: 8),
+          _buildTab("Rejected", jobCounts['rejected']?.toString() ?? "0"),
         ],
       ),
     );
@@ -203,25 +203,23 @@ class _JobScreenState extends State<JobScreen> {
 
   Widget _buildTab(String text, String count) {
     final isSelected = selectedTab == text.toLowerCase();
-    return Expanded(
-      child: GestureDetector(
-        onTap: () {
-          setState(() => selectedTab = text.toLowerCase());
-        },
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 12),
-          decoration: BoxDecoration(
-            gradient: isSelected ? AppColors.primaryGradient : null,
-            color: isSelected ? null : Colors.transparent,
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Text(
-            "$text\n$count",
-            textAlign: TextAlign.center,
-            style: AppTextStyles.subtitle2.copyWith(
-              color: isSelected ? Colors.white : AppColors.textSecondary,
-              fontWeight: FontWeight.w600,
-            ),
+    return GestureDetector(
+      onTap: () {
+        setState(() => selectedTab = text.toLowerCase());
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          gradient: isSelected ? AppColors.primaryGradient : null,
+          color: isSelected ? null : AppColors.surfaceLight,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Text(
+          "$text\n$count",
+          textAlign: TextAlign.center,
+          style: AppTextStyles.subtitle2.copyWith(
+            color: isSelected ? Colors.white : AppColors.textSecondary,
+            fontWeight: FontWeight.w600,
           ),
         ),
       ),
@@ -240,6 +238,7 @@ class _JobScreenState extends State<JobScreen> {
     required String posted,
     required int applicants,
   }) {
+    final rejectionReason = job['rejectionReason'] as String?;
     return InkWell(
       onTap: () async {
         // Navigate to job details screen
@@ -278,41 +277,43 @@ class _JobScreenState extends State<JobScreen> {
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
-                  status,
+                  status[0].toUpperCase() + status.substring(1),
                   style: AppTextStyles.caption.copyWith(
                     color: statusColor,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
               ),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 6,
-                ),
-                decoration: BoxDecoration(
-                  color: AppColors.primary.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.people_outline,
-                      size: 14,
-                      color: AppColors.primary,
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      "$applicants",
-                      style: AppTextStyles.caption.copyWith(
+              // Only show applicants count for active jobs
+              if (status.toLowerCase() == 'active')
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.people_outline,
+                        size: 14,
                         color: AppColors.primary,
-                        fontWeight: FontWeight.bold,
                       ),
-                    ),
-                  ],
+                      const SizedBox(width: 4),
+                      Text(
+                        "$applicants",
+                        style: AppTextStyles.caption.copyWith(
+                          color: AppColors.primary,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
             ],
           ),
           const SizedBox(height: 16),
@@ -354,6 +355,46 @@ class _JobScreenState extends State<JobScreen> {
           ),
           const SizedBox(height: 6),
           Text(posted, style: AppTextStyles.caption),
+          // Show rejection reason if status is rejected
+          if (status.toLowerCase() == 'rejected' && rejectionReason != null && rejectionReason.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.red.shade50,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: Colors.red.shade200),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(Icons.info_outline, size: 16, color: Colors.red.shade700),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Rejection Reason',
+                          style: AppTextStyles.caption.copyWith(
+                            color: Colors.red.shade700,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          rejectionReason,
+                          style: AppTextStyles.body2.copyWith(
+                            color: Colors.red.shade800,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
           const SizedBox(height: 20),
           Row(
             children: [
@@ -365,7 +406,7 @@ class _JobScreenState extends State<JobScreen> {
                     icon: const Icon(Icons.publish, size: 18),
                     label: const Text("Publish Job"),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.success,
+                      backgroundColor: const Color(0xFF2196C4),
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(vertical: 12),
                       shape: RoundedRectangleBorder(
@@ -375,7 +416,9 @@ class _JobScreenState extends State<JobScreen> {
                   ),
                 ),
                 const SizedBox(width: 8),
-              ] else ...[
+              ] 
+              // Show applicants button only for active jobs
+              else if (status.toLowerCase() == 'active') ...[
                 Expanded(
                   child: ElevatedButton.icon(
                     onPressed: () {
@@ -402,45 +445,42 @@ class _JobScreenState extends State<JobScreen> {
                   ),
                 ),
                 const SizedBox(width: 8),
+              ]
+              // For pending and closed jobs, show spacer to maintain layout
+              else ...[
+                const Expanded(child: SizedBox()),
+                const SizedBox(width: 8),
               ],
-              // InkWell(
-              //   onTap: () async {
-              //     final result = await Navigator.push(
-              //       context,
-              //       MaterialPageRoute(
-              //         builder: (context) => EditJobScreen(
-              //           job: {
-              //             '_id': jobId,
-              //             'title': title,
-              //             'description': description,
-              //             'salary': int.tryParse(
-              //               salary.replaceAll(RegExp(r'[^0-9]'), ''),
-              //             ),
-              //             'location': location,
-              //             'status': status,
-              //           },
-              //         ),
-              //       ),
-              //     );
-              //     if (result == true && context.mounted) {
-              //       context.read<JobProvider>().fetchJobs();
-              //     }
-              //   },
-              //   borderRadius: BorderRadius.circular(12),
-              //   child: Container(
-              //     padding: const EdgeInsets.all(12),
-              //     decoration: BoxDecoration(
-              //       color: AppColors.surfaceLight,
-              //       borderRadius: BorderRadius.circular(12),
-              //     ),
-              //     child: Icon(
-              //       Icons.edit_outlined,
-              //       color: AppColors.primary,
-              //       size: 20,
-              //     ),
-              //   ),
-              // ),
-              // const SizedBox(width: 8),
+              // Show edit button only for draft and rejected jobs
+              if (status.toLowerCase() == 'draft' || status.toLowerCase() == 'rejected') ...[
+                InkWell(
+                  onTap: () async {
+                    final result = await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => EditJobBasicDetailsPage(job: job),
+                      ),
+                    );
+                    if (result == true && context.mounted) {
+                      context.read<JobProvider>().fetchJobs(forceRefresh: true);
+                    }
+                  },
+                  borderRadius: BorderRadius.circular(12),
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(
+                      Icons.edit_outlined,
+                      color: AppColors.primary,
+                      size: 20,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+              ],
               InkWell(
                 onTap: () => _showDeleteDialog(context, jobId, title),
                 borderRadius: BorderRadius.circular(12),
@@ -475,6 +515,8 @@ class _JobScreenState extends State<JobScreen> {
         return AppColors.warning;
       case 'closed':
         return AppColors.error;
+      case 'rejected':
+        return Colors.red.shade700;
       default:
         return AppColors.textSecondary;
     }

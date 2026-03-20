@@ -617,7 +617,7 @@ class _CreateProfileScreenState extends State<CreateProfileScreen> {
         ),
         const SizedBox(height: 8),
         DropdownButtonFormField<String>(
-          value: _selectedEmployeeCount,
+          initialValue: _selectedEmployeeCount,
           decoration: InputDecoration(
             hintText: "Select employee count",
             prefixIcon: Icon(Icons.groups_outlined, color: AppColors.primary),

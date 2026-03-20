@@ -860,7 +860,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         ),
         const SizedBox(height: 8),
         DropdownButtonFormField<String>(
-          value: _selectedTotalEmp,
+          initialValue: _selectedTotalEmp,
           decoration: InputDecoration(
             hintText: "Select employee count",
             prefixIcon: Icon(Icons.groups_outlined, color: AppColors.primary),

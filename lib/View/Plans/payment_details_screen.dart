@@ -4,6 +4,7 @@ import '../../core/app_colors.dart';
 import '../../core/app_text_styles.dart';
 import '../../models/payment_history_model.dart';
 import '../../services/payment_history_api_service.dart';
+import '../../services/invoice_download_service.dart';
 
 class PaymentDetailsScreen extends StatefulWidget {
   final String orderId;
@@ -23,6 +24,7 @@ class _PaymentDetailsScreenState extends State<PaymentDetailsScreen> {
   PaymentHistory? _paymentDetails;
   bool _isLoading = false;
   String _errorMessage = '';
+  bool _isDownloading = false;
 
   @override
   void initState() {
@@ -60,6 +62,42 @@ class _PaymentDetailsScreenState extends State<PaymentDetailsScreen> {
         _errorMessage = 'Unable to load payment details. Please check your connection and try again.';
         _isLoading = false;
       });
+    }
+  }
+
+  Future<void> _downloadInvoice() async {
+    final paymentId = _paymentDetails?.paymentId;
+    if (paymentId == null) return;
+
+    setState(() => _isDownloading = true);
+
+    try {
+      final filePath = await InvoiceDownloadService.downloadInvoice(paymentId);
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Invoice downloaded to Downloads folder'),
+          backgroundColor: AppColors.success,
+          duration: const Duration(seconds: 4),
+          action: SnackBarAction(
+            label: 'Open',
+            textColor: Colors.white,
+            onPressed: () => InvoiceDownloadService.openFile(filePath),
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Download failed: ${e.toString().replaceAll('Exception: ', '')}'),
+          backgroundColor: AppColors.error,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isDownloading = false);
     }
   }
 
@@ -164,6 +202,11 @@ class _PaymentDetailsScreenState extends State<PaymentDetailsScreen> {
           _buildOrderInfoCard(),
           const SizedBox(height: 20),
           _buildValidityCard(),
+          if (_paymentDetails?.paymentId != null) ...[
+            const SizedBox(height: 24),
+            _buildDownloadButton(),
+          ],
+          const SizedBox(height: 20),
         ],
       ),
     );
@@ -314,6 +357,30 @@ class _PaymentDetailsScreenState extends State<PaymentDetailsScreen> {
           '${payment.validUntil!.difference(payment.validFrom!).inDays} days',
         ),
       ],
+    );
+  }
+
+  Widget _buildDownloadButton() {
+    return SizedBox(
+      width: double.infinity,
+      child: ElevatedButton.icon(
+        onPressed: _isDownloading ? null : _downloadInvoice,
+        icon: _isDownloading
+            ? const SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+              )
+            : const Icon(Icons.download_rounded, size: 20),
+        label: Text(_isDownloading ? 'Downloading...' : 'Download Invoice'),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: AppColors.primary,
+          foregroundColor: Colors.white,
+          padding: const EdgeInsets.symmetric(vertical: 14),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          textStyle: AppTextStyles.subtitle1.copyWith(fontWeight: FontWeight.w600),
+        ),
+      ),
     );
   }
 

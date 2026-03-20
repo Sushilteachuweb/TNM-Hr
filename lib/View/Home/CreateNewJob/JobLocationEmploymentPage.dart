@@ -10,8 +10,8 @@ import '../../../Provider/job_form_provider.dart';
 import '../../../Provider/hr_profile_provider.dart';
 import '../../../Provider/unified_billing_provider.dart';
 import '../../../services/job_creation_service.dart';
+import '../../../utils/job_error_helper.dart';
 import '../../bottomNavBar/bottomNavBar.dart';
-import '../CreateNewJobDetails/subscription/subscription.dart';
 
 class JobLocationEmploymentPage extends StatefulWidget {
   const JobLocationEmploymentPage({super.key});
@@ -603,7 +603,7 @@ class _JobLocationEmploymentPageState extends State<JobLocationEmploymentPage> {
         ),
         const SizedBox(height: 8),
         DropdownButtonFormField<String>(
-          value: value,
+          initialValue: value,
           items: items.map((item) {
             return DropdownMenuItem<String>(
               value: item,
@@ -650,7 +650,7 @@ class _JobLocationEmploymentPageState extends State<JobLocationEmploymentPage> {
         ),
         const SizedBox(height: 8),
         DropdownButtonFormField<String>(
-          value: value,
+          initialValue: value,
           items: items.asMap().entries.map((entry) {
             int index = entry.key;
             String item = entry.value;
@@ -805,16 +805,8 @@ class _JobLocationEmploymentPageState extends State<JobLocationEmploymentPage> {
                         );
                       }
                     } else {
-                      // Job creation failed
+                      // Job creation failed - error already shown by JobCreationService
                       print("❌ Failed to create job as draft");
-                      if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: const Text('Failed to create job. Please try again.'),
-                            backgroundColor: AppColors.error,
-                          ),
-                        );
-                      }
                     }
                   } catch (e) {
                     // Remove loading indicator on error
@@ -826,17 +818,25 @@ class _JobLocationEmploymentPageState extends State<JobLocationEmploymentPage> {
                       print("❌ Job creation error: $e");
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
-                          content: const Text('Unable to create job. Please try again.'),
+                          content: const Text('Unable to create job. Please check your connection and try again.'),
                           backgroundColor: AppColors.error,
+                          behavior: SnackBarBehavior.floating,
+                          duration: Duration(seconds: 4),
                         ),
                       );
                     }
                   }
                 } else {
+                  final msg = JobErrorHelper.page2ValidationMessage(
+                    workLocationType: formProvider.workLocationType,
+                    officeAddress: formProvider.officeAddress,
+                    totalOpenings: formProvider.totalOpenings,
+                  );
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
-                      content: Text('Please fill all required fields'),
+                      content: Text(msg),
                       backgroundColor: AppColors.error,
+                      behavior: SnackBarBehavior.floating,
                     ),
                   );
                 }

@@ -4,6 +4,7 @@ import '../services/job_api_service.dart';
 class JobProvider with ChangeNotifier {
   bool _isLoading = false;
   String _errorMessage = '';
+  dynamic _rawErrorMessage; // preserves List or String from API
   List<dynamic> _jobs = [];
   Map<String, int> _jobCounts = {
     'active': 0,
@@ -14,6 +15,7 @@ class JobProvider with ChangeNotifier {
 
   bool get isLoading => _isLoading;
   String get errorMessage => _errorMessage;
+  dynamic get rawErrorMessage => _rawErrorMessage;
   List<dynamic> get jobs => _jobs;
   Map<String, int> get jobCounts => _jobCounts;
   bool get hasLoadedOnce => _hasLoadedOnce;
@@ -179,7 +181,8 @@ class JobProvider with ChangeNotifier {
       notifyListeners();
       return true;
     } else {
-      _errorMessage = result['message'] ?? 'Failed to create job';
+      _rawErrorMessage = result['message'];
+      _errorMessage = result['message']?.toString() ?? 'Failed to create job';
       notifyListeners();
       return false;
     }
@@ -216,9 +219,29 @@ class JobProvider with ChangeNotifier {
   Future<bool> updateJob({
     required String jobId,
     String? title,
-    String? description,
-    int? salary,
-    String? location,
+    String? companyName,
+    String? jobType,
+    String? salaryType,
+    Map<String, int>? salaryRange,
+    String? workLocation,
+    String? jobLocation,
+    String? preferredLocation,
+    String? officeAddress,
+    String? floorDetails,
+    List<double>? coordinates,
+    String? minimumEducation,
+    String? englishLevel,
+    String? totalExperience,
+    String? jobDescription,
+    Map<String, int>? ageRange,
+    String? gender,
+    int? openings,
+    bool? isWalkInInterview,
+    List<String>? additionalPerks,
+    List<String>? documents,
+    String? communicationPreference,
+    String? workingDays,
+    String? jobTiming,
   }) async {
     _isLoading = true;
     _errorMessage = '';
@@ -227,19 +250,40 @@ class JobProvider with ChangeNotifier {
     final result = await JobApiService.updateJob(
       jobId: jobId,
       title: title,
-      description: description,
-      salary: salary,
-      location: location,
+      companyName: companyName,
+      jobType: jobType,
+      salaryType: salaryType,
+      salaryRange: salaryRange,
+      workLocation: workLocation,
+      jobLocation: jobLocation,
+      preferredLocation: preferredLocation,
+      officeAddress: officeAddress,
+      floorDetails: floorDetails,
+      coordinates: coordinates,
+      minimumEducation: minimumEducation,
+      englishLevel: englishLevel,
+      totalExperience: totalExperience,
+      jobDescription: jobDescription,
+      ageRange: ageRange,
+      gender: gender,
+      openings: openings,
+      isWalkInInterview: isWalkInInterview,
+      additionalPerks: additionalPerks,
+      documents: documents,
+      communicationPreference: communicationPreference,
+      workingDays: workingDays,
+      jobTiming: jobTiming,
     );
 
     _isLoading = false;
 
     if (result['success'] == true) {
-      await fetchJobs(); // Refresh list
+      await fetchJobs(forceRefresh: true);
       notifyListeners();
       return true;
     } else {
-      _errorMessage = result['message'] ?? 'Failed to update job';
+      _rawErrorMessage = result['message'];
+      _errorMessage = result['message']?.toString() ?? 'Failed to update job';
       notifyListeners();
       return false;
     }
@@ -272,6 +316,7 @@ class JobProvider with ChangeNotifier {
       'active': _jobs.where((job) => job['status'] == 'active').length,
       'pending': _jobs.where((job) => job['status'] == 'pending').length,
       'closed': _jobs.where((job) => job['status'] == 'closed').length,
+      'rejected': _jobs.where((job) => job['status'] == 'rejected').length,
     };
   }
 

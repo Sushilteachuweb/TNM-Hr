@@ -44,4 +44,10 @@ class ApiConfig {
   
   // Payment Details endpoints
   static String paymentDetails(String orderId) => "https://api.thenaukrimitra.com/api/payment/details/$orderId";
+
+  // Invoice Download endpoint
+  static String downloadInvoice(String paymentId) => "https://api.thenaukrimitra.com/api/payment/download-invoice/$paymentId";
+
+  // Checkout Summary endpoint
+  static String checkoutSummary(String planId) => "https://api.thenaukrimitra.com/api/payment/checkout-summary/$planId";
 }

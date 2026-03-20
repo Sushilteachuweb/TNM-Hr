@@ -119,6 +119,8 @@ class UnifiedBillingProvider with ChangeNotifier {
         _paymentHistoryError = 'Mobile number not found';
         _paymentHistory = [];
         _totalPayments = 0;
+        _paymentHistoryLoading = false;
+        notifyListeners();
         return;
       }
 

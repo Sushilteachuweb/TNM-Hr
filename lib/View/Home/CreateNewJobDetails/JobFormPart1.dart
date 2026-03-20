@@ -18,7 +18,7 @@ class _JobFormPart1State extends State<JobFormPart1> {
   final TextEditingController maxSalaryController = TextEditingController();
 
   final openings = ["Fresher", "Experience", "Any"];
-  final salaryTypes = ["Fixed", "Fixed + Incentive"];
+  final salaryTypes = ["Fixed Only", "Fixed + Incentive", "Incentive Only"];
 
   @override
   void dispose() {
@@ -215,48 +215,89 @@ class _JobFormPart1State extends State<JobFormPart1> {
         ),
         const SizedBox(height: 20),
 
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              "Salary Range (Monthly)",
-              style: AppTextStyles.subtitle2.copyWith(
-                color: AppColors.textPrimary,
-                fontWeight: FontWeight.w600,
+        if (formProvider.salaryType != 'Incentive Only') ...[
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                "Salary Range (Monthly)",
+                style: AppTextStyles.subtitle2.copyWith(
+                  color: AppColors.textPrimary,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
-            ),
-            Text(
-              "Min: Rs 10,000",
-              style: AppTextStyles.caption.copyWith(
-                color: AppColors.textSecondary,
+              Text(
+                "Min: Rs 10,000",
+                style: AppTextStyles.caption.copyWith(
+                  color: AppColors.textSecondary,
+                ),
               ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        Row(
-          children: [
-            Expanded(
-              child: Focus(
-                onFocusChange: (hasFocus) {
-                  if (!hasFocus && minSalaryController.text.isNotEmpty) {
-                    final salary = int.tryParse(minSalaryController.text) ?? 0;
-                    if (salary < 10000) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text('Minimum salary must be Rs 10,000'),
-                          backgroundColor: Colors.red,
-                          duration: Duration(seconds: 2),
-                        ),
-                      );
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: Focus(
+                  onFocusChange: (hasFocus) {
+                    if (!hasFocus && minSalaryController.text.isNotEmpty) {
+                      final salary = int.tryParse(minSalaryController.text) ?? 0;
+                      if (salary < 10000) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Minimum salary must be Rs 10,000'),
+                            backgroundColor: Colors.red,
+                            duration: Duration(seconds: 2),
+                          ),
+                        );
+                      }
                     }
-                  }
-                },
+                  },
+                  child: TextField(
+                    controller: minSalaryController,
+                    keyboardType: TextInputType.number,
+                    onChanged: (value) {
+                      formProvider.setSalaryRange(value, maxSalaryController.text);
+                    },
+                    decoration: InputDecoration(
+                      prefixText: "Rs ",
+                      prefixStyle: AppTextStyles.body2.copyWith(
+                        color: AppColors.textPrimary,
+                        fontWeight: FontWeight.w500,
+                      ),
+                      hintText: "10,000",
+                      hintStyle: AppTextStyles.body2.copyWith(
+                        color: AppColors.textHint,
+                      ),
+                      filled: true,
+                      fillColor: AppColors.surface,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: AppColors.border),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: AppColors.border),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: AppColors.primary, width: 2),
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 16,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
                 child: TextField(
-                  controller: minSalaryController,
+                  controller: maxSalaryController,
                   keyboardType: TextInputType.number,
                   onChanged: (value) {
-                    formProvider.setSalaryRange(value, maxSalaryController.text);
+                    formProvider.setSalaryRange(minSalaryController.text, value);
                   },
                   decoration: InputDecoration(
                     prefixText: "Rs ",
@@ -264,7 +305,7 @@ class _JobFormPart1State extends State<JobFormPart1> {
                       color: AppColors.textPrimary,
                       fontWeight: FontWeight.w500,
                     ),
-                    hintText: "10,000",
+                    hintText: "15,000",
                     hintStyle: AppTextStyles.body2.copyWith(
                       color: AppColors.textHint,
                     ),
@@ -289,48 +330,9 @@ class _JobFormPart1State extends State<JobFormPart1> {
                   ),
                 ),
               ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: TextField(
-                controller: maxSalaryController,
-                keyboardType: TextInputType.number,
-                onChanged: (value) {
-                  formProvider.setSalaryRange(minSalaryController.text, value);
-                },
-                decoration: InputDecoration(
-                  prefixText: "Rs ",
-                  prefixStyle: AppTextStyles.body2.copyWith(
-                    color: AppColors.textPrimary,
-                    fontWeight: FontWeight.w500,
-                  ),
-                  hintText: "15,000",
-                  hintStyle: AppTextStyles.body2.copyWith(
-                    color: AppColors.textHint,
-                  ),
-                  filled: true,
-                  fillColor: AppColors.surface,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(color: AppColors.border),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(color: AppColors.border),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(color: AppColors.primary, width: 2),
-                  ),
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 16,
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
+            ],
+          ),
+        ],
       ],
     );
   }

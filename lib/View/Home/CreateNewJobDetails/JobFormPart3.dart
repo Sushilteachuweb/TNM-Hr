@@ -341,57 +341,24 @@ class _JobFormPart3State extends State<JobFormPart3> {
             fontWeight: FontWeight.w600,
           ),
         ),
-        const SizedBox(height: 12),
-
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: AppColors.surfaceLight,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: AppColors.border),
-          ),
-          child: Column(
-            children: [
-              CheckboxListTile(
-                value: formProvider.allowCall,
-                onChanged: (value) {
-                  formProvider.setCommunicationPreferences(
-                    value!,
-                    formProvider.allowWhatsApp,
-                  );
-                },
-                title: Text(
-                  "Allow Call on +91XXXXXXX (Edit)",
-                  style: AppTextStyles.body2.copyWith(
-                    color: AppColors.textPrimary,
-                  ),
-                ),
-                activeColor: AppColors.primary,
-                contentPadding: EdgeInsets.zero,
-                controlAffinity: ListTileControlAffinity.leading,
-              ),
-              const Divider(color: AppColors.divider),
-              CheckboxListTile(
-                value: formProvider.allowWhatsApp,
-                onChanged: (value) {
-                  formProvider.setCommunicationPreferences(
-                    formProvider.allowCall,
-                    value!,
-                  );
-                },
-                title: Text(
-                  "WhatsApp on +91XXXXXXX (Edit)",
-                  style: AppTextStyles.body2.copyWith(
-                    color: AppColors.textPrimary,
-                  ),
-                ),
-                activeColor: AppColors.primary,
-                contentPadding: EdgeInsets.zero,
-                controlAffinity: ListTileControlAffinity.leading,
-              ),
-            ],
-          ),
+        const SizedBox(height: 8),
+        Text(
+          "Do you want candidates to contact you after they apply? *",
+          style: AppTextStyles.body2.copyWith(color: AppColors.textSecondary),
         ),
+        const SizedBox(height: 8),
+        ...["Yes, to myself", "Yes, to other recruiter", "No, I will contact candidates first"]
+            .map((option) => RadioListTile<String>(
+                  title: Text(
+                    option,
+                    style: AppTextStyles.body2.copyWith(color: AppColors.textPrimary),
+                  ),
+                  value: option,
+                  groupValue: formProvider.communicationPreference,
+                  onChanged: (v) => formProvider.setCommunicationPreference(v!),
+                  activeColor: AppColors.primary,
+                  contentPadding: EdgeInsets.zero,
+                )),
       ],
     );
   }

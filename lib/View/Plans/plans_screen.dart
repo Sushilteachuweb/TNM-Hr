@@ -19,6 +19,7 @@ import '../../services/user_storage.dart';
 import '../bottomNavBar/bottomNavBar.dart';
 import '../../widgets/skeleton_components.dart';
 import 'payment_details_screen.dart';
+import 'checkout_summary_screen.dart';
 
 class PlansScreen extends StatefulWidget {
   const PlansScreen({super.key});
@@ -27,9 +28,11 @@ class PlansScreen extends StatefulWidget {
   State<PlansScreen> createState() => _PlansScreenState();
 }
 
-class _PlansScreenState extends State<PlansScreen> with SingleTickerProviderStateMixin {
+class _PlansScreenState extends State<PlansScreen> with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   late Razorpay _razorpay;
   late TabController _tabController;
+  bool _isRazorpayInitialized = false;
+  bool _isPaymentInProgress = false;
   
   // Store current order details for verification
   String? _currentOrderId;
@@ -40,19 +43,17 @@ class _PlansScreenState extends State<PlansScreen> with SingleTickerProviderStat
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _tabController = TabController(length: 2, vsync: this);
-    _razorpay = Razorpay();
-    _razorpay.on(Razorpay.EVENT_PAYMENT_SUCCESS, _handlePaymentSuccess);
-    _razorpay.on(Razorpay.EVENT_PAYMENT_ERROR, _handlePaymentError);
-    _razorpay.on(Razorpay.EVENT_EXTERNAL_WALLET, _handleExternalWallet);
+    _initializeRazorpay();
     
     // Data is already loaded by AppDataManager, just initialize billing history
     // But also ensure plans are loaded in case AppDataManager wasn't called
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final unifiedBillingProvider = Provider.of<UnifiedBillingProvider>(context, listen: false);
-      if (!unifiedBillingProvider.hasLoadedOnce) {
-        print("📋 Unified billing data not loaded yet, fetching now...");
-        unifiedBillingProvider.fetchAllData();
+      if (!unifiedBillingProvider.hasLoadedOnce || unifiedBillingProvider.paymentHistoryError.isNotEmpty) {
+        print("📋 Unified billing data not loaded or has error, fetching now...");
+        unifiedBillingProvider.fetchAllData(forceRefresh: unifiedBillingProvider.paymentHistoryError.isNotEmpty);
       }
       
       // Ensure plans are loaded
@@ -64,10 +65,69 @@ class _PlansScreenState extends State<PlansScreen> with SingleTickerProviderStat
     });
   }
 
+  void _initializeRazorpay() {
+    try {
+      _razorpay = Razorpay();
+      _razorpay.on(Razorpay.EVENT_PAYMENT_SUCCESS, _handlePaymentSuccess);
+      _razorpay.on(Razorpay.EVENT_PAYMENT_ERROR, _handlePaymentError);
+      _razorpay.on(Razorpay.EVENT_EXTERNAL_WALLET, _handleExternalWallet);
+      _isRazorpayInitialized = true;
+      
+      developer.log(
+        json.encode({
+          'timestamp': DateTime.now().toIso8601String(),
+          'event': 'razorpay_initialized_successfully',
+        }),
+        name: 'PaymentFlow',
+      );
+    } catch (e, stackTrace) {
+      _isRazorpayInitialized = false;
+      
+      developer.log(
+        json.encode({
+          'timestamp': DateTime.now().toIso8601String(),
+          'event': 'razorpay_initialization_failed',
+          'error': e.toString(),
+          'stackTrace': stackTrace.toString(),
+        }),
+        name: 'PaymentFlow',
+      );
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    
+    developer.log(
+      json.encode({
+        'timestamp': DateTime.now().toIso8601String(),
+        'event': 'app_lifecycle_changed',
+        'state': state.toString(),
+        'hasCurrentOrder': _currentOrderId != null,
+      }),
+      name: 'PaymentFlow',
+    );
+  }
+
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _tabController.dispose();
-    _razorpay.clear();
+    if (_isRazorpayInitialized) {
+      try {
+        _razorpay.clear();
+      } catch (e) {
+        developer.log(
+          json.encode({
+            'timestamp': DateTime.now().toIso8601String(),
+            'event': 'razorpay_clear_failed',
+            'error': e.toString(),
+          }),
+          name: 'PaymentFlow',
+        );
+      }
+    }
     super.dispose();
   }
 
@@ -90,12 +150,28 @@ class _PlansScreenState extends State<PlansScreen> with SingleTickerProviderStat
       name: 'PaymentFlow',
     );
     
+    // Check if widget is still mounted
+    if (!mounted) {
+      developer.log(
+        json.encode({
+          'timestamp': DateTime.now().toIso8601String(),
+          'event': 'payment_success_widget_not_mounted',
+          'orderId': response.orderId,
+        }),
+        name: 'PaymentFlow',
+      );
+      return;
+    }
+    
     // Show loading indicator
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) => const Center(
-        child: CircularProgressIndicator(),
+      builder: (context) => WillPopScope(
+        onWillPop: () async => false,
+        child: const Center(
+          child: CircularProgressIndicator(),
+        ),
       ),
     );
     
@@ -150,6 +226,13 @@ class _PlansScreenState extends State<PlansScreen> with SingleTickerProviderStat
         // Clear current order details
         _clearCurrentOrderDetails();
         
+        // Reset payment in progress flag
+        if (mounted) {
+          setState(() {
+            _isPaymentInProgress = false;
+          });
+        }
+        
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -186,6 +269,13 @@ class _PlansScreenState extends State<PlansScreen> with SingleTickerProviderStat
         
         // Clear current order details
         _clearCurrentOrderDetails();
+        
+        // Reset payment in progress flag
+        if (mounted) {
+          setState(() {
+            _isPaymentInProgress = false;
+          });
+        }
         
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -228,6 +318,13 @@ class _PlansScreenState extends State<PlansScreen> with SingleTickerProviderStat
       // Clear current order details
       _clearCurrentOrderDetails();
       
+      // Reset payment in progress flag
+      if (mounted) {
+        setState(() {
+          _isPaymentInProgress = false;
+        });
+      }
+      
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -256,22 +353,66 @@ class _PlansScreenState extends State<PlansScreen> with SingleTickerProviderStat
       name: 'PaymentFlow',
     );
     
-    // Update billing record status to failed if order exists
-    if (_currentOrderId != null) {
-      final billingProvider = Provider.of<BillingProvider>(context, listen: false);
-      await billingProvider.updateBillingRecordStatus(
-        orderId: _currentOrderId!,
-        status: 'Failed',
+    // Check if widget is still mounted
+    if (!mounted) {
+      developer.log(
+        json.encode({
+          'timestamp': DateTime.now().toIso8601String(),
+          'event': 'payment_error_widget_not_mounted',
+          'orderId': _currentOrderId,
+        }),
+        name: 'PaymentFlow',
+      );
+      return;
+    }
+    
+    try {
+      // Update billing record status to failed if order exists
+      if (_currentOrderId != null) {
+        final billingProvider = Provider.of<BillingProvider>(context, listen: false);
+        await billingProvider.updateBillingRecordStatus(
+          orderId: _currentOrderId!,
+          status: 'Failed',
+        );
+      }
+    } catch (e) {
+      developer.log(
+        json.encode({
+          'timestamp': DateTime.now().toIso8601String(),
+          'event': 'billing_update_failed_in_error_handler',
+          'error': e.toString(),
+        }),
+        name: 'PaymentFlow',
       );
     }
     
     // Clear current order details
     _clearCurrentOrderDetails();
     
+    // Reset payment in progress flag
     if (mounted) {
+      setState(() {
+        _isPaymentInProgress = false;
+      });
+    }
+    
+    if (mounted) {
+      // Determine user-friendly message based on error code
+      String errorMessage = 'Payment failed. Please try again.';
+      
+      // Error code 0 = User cancelled (back button pressed)
+      // Error code 2 = User cancelled (back button pressed) - most common
+      if (response.code == 0 || response.code == 2) {
+        errorMessage = 'Payment cancelled. You can try again when ready.';
+      } else if (response.message?.toLowerCase().contains('network') ?? false) {
+        errorMessage = 'Network error. Please check your connection and try again.';
+      } else if (response.message?.toLowerCase().contains('insufficient') ?? false) {
+        errorMessage = 'Insufficient balance. Please try a different payment method.';
+      }
+      
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text('Payment was cancelled or failed. Please try again.'),
+          content: Text(errorMessage),
           backgroundColor: AppColors.error,
           duration: const Duration(seconds: 5),
         ),
@@ -294,8 +435,20 @@ class _PlansScreenState extends State<PlansScreen> with SingleTickerProviderStat
       name: 'PaymentFlow',
     );
     
-    // Clear current order details since external wallet was used
-    _clearCurrentOrderDetails();
+    // Check if widget is still mounted
+    if (!mounted) {
+      developer.log(
+        json.encode({
+          'timestamp': DateTime.now().toIso8601String(),
+          'event': 'external_wallet_widget_not_mounted',
+          'orderId': _currentOrderId,
+        }),
+        name: 'PaymentFlow',
+      );
+      return;
+    }
+    
+    // Don't clear order details yet - wait for success/failure callback
     
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -329,6 +482,59 @@ class _PlansScreenState extends State<PlansScreen> with SingleTickerProviderStat
 
   Future<void> _buyPlan(JobPlan plan) async {
     final startTime = DateTime.now();
+    
+    // Prevent multiple simultaneous payment attempts
+    if (_isPaymentInProgress) {
+      developer.log(
+        json.encode({
+          'timestamp': DateTime.now().toIso8601String(),
+          'event': 'buy_plan_blocked',
+          'reason': 'payment_already_in_progress',
+          'planId': plan.id,
+        }),
+        name: 'PaymentFlow',
+      );
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Please wait, payment is already in progress.'),
+            backgroundColor: AppColors.warning,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+      return;
+    }
+    
+    // Check if Razorpay is initialized
+    if (!_isRazorpayInitialized) {
+      developer.log(
+        json.encode({
+          'timestamp': DateTime.now().toIso8601String(),
+          'event': 'buy_plan_failed',
+          'reason': 'razorpay_not_initialized',
+          'planId': plan.id,
+        }),
+        name: 'PaymentFlow',
+      );
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Payment service is not ready. Please restart the app.'),
+            backgroundColor: AppColors.error,
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      }
+      return;
+    }
+    
+    // Set payment in progress flag
+    setState(() {
+      _isPaymentInProgress = true;
+    });
     
     try {
       // Get user data from UserStorage
@@ -390,6 +596,29 @@ class _PlansScreenState extends State<PlansScreen> with SingleTickerProviderStat
       if (orderResponse['success'] == true && orderResponse['order'] != null) {
         final order = orderResponse['order'];
         
+        // Validate order data
+        if (order['id'] == null || order['amount'] == null) {
+          developer.log(
+            json.encode({
+              'timestamp': DateTime.now().toIso8601String(),
+              'event': 'order_validation_failed',
+              'reason': 'missing_required_fields',
+              'order': order,
+            }),
+            name: 'PaymentFlow',
+          );
+          
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: const Text('Invalid order data received. Please try again.'),
+                backgroundColor: AppColors.error,
+              ),
+            );
+          }
+          return;
+        }
+        
         developer.log(
           json.encode({
             'timestamp': DateTime.now().toIso8601String(),
@@ -422,40 +651,29 @@ class _PlansScreenState extends State<PlansScreen> with SingleTickerProviderStat
         
         // Start Razorpay payment with the order details
         // Match exactly with website implementation
-        var options = {
+        var options = <String, dynamic>{
           'key': RazorpayConfig.apiKey,
           'amount': order['amount'],
           'currency': order['currency'] ?? 'INR',
           'name': RazorpayConfig.companyName,
           'description': plan.planName,
           'order_id': order['id'],
-          'prefill': {
+          'prefill': <String, dynamic>{
             'name': userName,
             'contact': cleanMobileNumber,
             'email': userEmail.isNotEmpty ? userEmail : 'customer@thenaukrimitra.com'
           },
-          'theme': {
+          'theme': <String, dynamic>{
             'color': RazorpayConfig.brandColor
           },
-          'retry': {
+          'retry': <String, dynamic>{
             'enabled': true,
             'max_count': 3
           },
           'timeout': 600, // 10 minutes timeout for live mode
-          'modal': {
+          'modal': <String, dynamic>{
             'confirm_close': true,
-            'ondismiss': null, // Explicitly set to null to avoid callback issues
           },
-          'config': {
-            'display': {
-              'hide': [
-                {'method': 'paylater'}
-              ],
-              'preferences': {
-                'show_default_blocks': true
-              }
-            }
-          }
         };
         
         developer.log(
@@ -483,7 +701,56 @@ class _PlansScreenState extends State<PlansScreen> with SingleTickerProviderStat
           name: 'PaymentFlow',
         );
         
-        _razorpay.open(options);
+        // Open Razorpay with error handling
+        try {
+          _razorpay.open(options);
+          
+          developer.log(
+            json.encode({
+              'timestamp': DateTime.now().toIso8601String(),
+              'event': 'razorpay_dialog_opened_successfully',
+              'orderId': order['id'],
+            }),
+            name: 'PaymentFlow',
+          );
+        } catch (e, stackTrace) {
+          developer.log(
+            json.encode({
+              'timestamp': DateTime.now().toIso8601String(),
+              'event': 'razorpay_dialog_open_failed',
+              'orderId': order['id'],
+              'error': e.toString(),
+              'stackTrace': stackTrace.toString(),
+            }),
+            name: 'PaymentFlow',
+          );
+          
+          // Update billing record to failed
+          await Provider.of<BillingProvider>(context, listen: false).updateBillingRecordStatus(
+            orderId: order['id'],
+            status: 'Failed',
+          );
+          
+          // Clear current order details
+          _clearCurrentOrderDetails();
+          
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: const Text('Unable to open payment screen. Please try again.'),
+                backgroundColor: AppColors.error,
+                duration: const Duration(seconds: 5),
+                action: SnackBarAction(
+                  label: 'Retry',
+                  textColor: Colors.white,
+                  onPressed: () {
+                    _buyPlan(plan);
+                  },
+                ),
+              ),
+            );
+          }
+        }
       } else {
         developer.log(
           json.encode({
@@ -536,6 +803,23 @@ class _PlansScreenState extends State<PlansScreen> with SingleTickerProviderStat
           ),
         );
       }
+    } finally {
+      // Always reset payment in progress flag
+      if (mounted) {
+        setState(() {
+          _isPaymentInProgress = false;
+        });
+      }
+      
+      developer.log(
+        json.encode({
+          'timestamp': DateTime.now().toIso8601String(),
+          'event': 'buy_plan_completed',
+          'planId': plan.id,
+          'paymentInProgress': false,
+        }),
+        name: 'PaymentFlow',
+      );
     }
   }
 
@@ -1211,41 +1495,70 @@ class _PlansScreenState extends State<PlansScreen> with SingleTickerProviderStat
               // Pricing section
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.end,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      '₹${plan.pricePerMonth}',
-                      style: AppTextStyles.h2.copyWith(
-                        color: isCurrentPlan ? AppColors.success : AppColors.primary,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    if (plan.discountPercent > 0) ...[
-                      Text(
-                        '₹${plan.originalPrice}',
-                        style: AppTextStyles.body2.copyWith(
-                          decoration: TextDecoration.lineThrough,
-                          color: AppColors.textSecondary,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: AppColors.success,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          '${plan.discountPercent}% OFF',
-                          style: AppTextStyles.caption.copyWith(
-                            color: Colors.white,
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text(
+                          '₹${plan.pricePerMonth}',
+                          style: AppTextStyles.h2.copyWith(
+                            color: isCurrentPlan ? AppColors.success : AppColors.primary,
                             fontWeight: FontWeight.bold,
                           ),
+                        ),
+                        const SizedBox(width: 4),
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 4),
+                          child: Text(
+                            '/ ${_formatMonths(plan.validityDays)}',
+                            style: AppTextStyles.body2.copyWith(
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Row(
+                      children: [
+                        if (plan.discountPercent > 0) ...[
+                          Text(
+                            '₹${plan.originalPrice}',
+                            style: AppTextStyles.body2.copyWith(
+                              decoration: TextDecoration.lineThrough,
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: AppColors.success,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              '${plan.discountPercent.toStringAsFixed(plan.discountPercent % 1 == 0 ? 0 : 2)}% OFF',
+                              style: AppTextStyles.caption.copyWith(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                    if (plan.gstPercent > 0) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        '+ ${plan.gstPercent.toStringAsFixed(0)}% GST extra',
+                        style: AppTextStyles.caption.copyWith(
+                          color: AppColors.info,
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
                     ],
@@ -1263,35 +1576,41 @@ class _PlansScreenState extends State<PlansScreen> with SingleTickerProviderStat
                   children: [
                     _buildFeatureItem(
                       Icons.work_outline,
-                      '${plan.credits} Job Credits',
+                      '${plan.credits} Job credits',
                       AppColors.primary,
                     ),
+                    if (plan.dbCredits > 0)
+                      _buildFeatureItem(
+                        Icons.storage_outlined,
+                        '${plan.dbCredits} DB unlock credits',
+                        AppColors.secondary,
+                      ),
                     _buildFeatureItem(
                       Icons.schedule_outlined,
-                      'Valid for ${plan.validityDays} days',
+                      'Use these credits in ${plan.validityDays} days',
                       AppColors.secondary,
                     ),
                     _buildFeatureItem(
                       Icons.visibility_outlined,
-                      'Job active for ${plan.jobActiveDays} days',
+                      'Job will be active for ${plan.jobActiveDays} days',
                       AppColors.accent,
                     ),
                     if (plan.aiMatching)
                       _buildFeatureItem(
                         Icons.psychology_outlined,
-                        'AI-powered candidate matching',
+                        'AI driven matching algorithm',
                         AppColors.info,
                       ),
                     if (plan.advancedFilters > 0)
                       _buildFeatureItem(
                         Icons.filter_list_outlined,
-                        '${plan.advancedFilters}+ Advanced Filters',
+                        '${plan.advancedFilters}+ Advanced filters',
                         AppColors.primary,
                       ),
                     if (plan.whatsappLead)
                       _buildFeatureItem(
                         Icons.message_outlined,
-                        'WhatsApp lead notifications',
+                        'WhatsApp & Call based lead management',
                         AppColors.success,
                       ),
                   ],
@@ -1332,7 +1651,17 @@ class _PlansScreenState extends State<PlansScreen> with SingleTickerProviderStat
                           ),
                         )
                       : ElevatedButton(
-                          onPressed: () => _buyPlan(plan),
+                          onPressed: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => CheckoutSummaryScreen(
+                                  plan: plan,
+                                  onProceedToPay: () => _buyPlan(plan),
+                                ),
+                              ),
+                            );
+                          },
                           style: ElevatedButton.styleFrom(
                             backgroundColor: plan.isRecommended 
                                 ? AppColors.primary 
@@ -1356,6 +1685,14 @@ class _PlansScreenState extends State<PlansScreen> with SingleTickerProviderStat
         );
       },
     );
+  }
+
+  String _formatMonths(int days) {
+    if (days >= 30) {
+      int months = (days / 30).round();
+      return '$months Month${months > 1 ? 's' : ''}';
+    }
+    return '$days Days';
   }
 
   Widget _buildFeatureItem(IconData icon, String text, Color color) {

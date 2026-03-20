@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import 'package:flutter_html/flutter_html.dart';
 import '../../core/app_colors.dart';
 import '../../core/app_text_styles.dart';
 import '../../Provider/job_provider.dart';
 import 'Applicants/applicants.dart';
-import 'edit_job_screen.dart';
 import '../../widgets/skeleton_components.dart';
 
 class JobDetailsScreen extends StatefulWidget {
@@ -216,7 +216,9 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
           ],
         ),
       ),
-      bottomNavigationBar: _buildBottomBar(context, jobId, title),
+      bottomNavigationBar: status.toLowerCase() == 'active' 
+          ? _buildBottomBar(context, jobId, title) 
+          : null,
     );
   }
 
@@ -272,27 +274,29 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
               ],
             ),
             const SizedBox(height: 16),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              decoration: BoxDecoration(
-                color: AppColors.primary.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: AppColors.primary.withOpacity(0.2)),
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.people_outline, color: AppColors.primary, size: 20),
-                  const SizedBox(width: 8),
-                  Text(
-                    '$applicantsCount Applicants',
-                    style: AppTextStyles.body2.copyWith(
-                      color: AppColors.primary,
-                      fontWeight: FontWeight.w600,
+            // Only show applicants section for active jobs
+            if (status.toLowerCase() == 'active')
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: AppColors.primary.withOpacity(0.2)),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.people_outline, color: AppColors.primary, size: 20),
+                    const SizedBox(width: 8),
+                    Text(
+                      '$applicantsCount Applicants',
+                      style: AppTextStyles.body2.copyWith(
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
             if (createdAt != null || updatedAt != null) ...[
               const SizedBox(height: 12),
               Row(
@@ -435,12 +439,38 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(color: AppColors.border),
               ),
-              child: Text(
-                description,
-                style: AppTextStyles.body2.copyWith(
-                  color: AppColors.textPrimary,
-                  height: 1.5,
-                ),
+              child: Html(
+                data: description,
+                style: {
+                  "body": Style(
+                    margin: Margins.zero,
+                    padding: HtmlPaddings.zero,
+                    fontSize: FontSize(15),
+                    color: AppColors.textPrimary,
+                    lineHeight: const LineHeight(1.5),
+                  ),
+                  "b": Style(
+                    fontWeight: FontWeight.bold,
+                  ),
+                  "i": Style(
+                    fontStyle: FontStyle.italic,
+                  ),
+                  "ul": Style(
+                    margin: Margins.only(left: 0, top: 8, bottom: 8),
+                    padding: HtmlPaddings.only(left: 20),
+                    display: Display.block,
+                  ),
+                  "ol": Style(
+                    margin: Margins.only(left: 0, top: 8, bottom: 8),
+                    padding: HtmlPaddings.only(left: 20),
+                    display: Display.block,
+                  ),
+                  "li": Style(
+                    margin: Margins.only(bottom: 6),
+                    padding: HtmlPaddings.zero,
+                    display: Display.listItem,
+                  ),
+                },
               ),
             ),
           ],

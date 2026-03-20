@@ -375,24 +375,28 @@ class _ApplicantsState extends State<Applicants> {
                         Expanded(
                           child: _buildDetailText(
                             Icons.account_balance_wallet_outlined,
-                            applicant['currentSalary']?.toString() ?? 
-                            applicant['expectedSalary']?.toString() ?? 
-                            applicant['salary']?.toString() ?? 
-                            'Not specified',
+                            () {
+                              final raw = applicant['currentSalary'] ?? applicant['expectedSalary'] ?? applicant['salary'];
+                              if (raw == null || raw.toString().isEmpty) return 'Fresher';
+                              final val = raw.toString();
+                              return val.startsWith('₹') ? val : '₹$val';
+                            }(),
                             AppColors.success,
                           ),
                         ),
                         Expanded(
                           child: _buildDetailText(
                             Icons.school_outlined,
-                            applicant['education'] ?? 'Not specified',
+                            applicant['education']?.toString().isNotEmpty == true
+                                ? applicant['education']
+                                : 'Not specified',
                             AppColors.primary,
                           ),
                         ),
                         Expanded(
                           child: _buildDetailText(
                             Icons.work_outline,
-                            '${applicant['totalExperience'] ?? applicant['experience'] ?? '0'} yrs',
+                            '${applicant['experience'] ?? applicant['totalExperience'] ?? '0'} yrs',
                             AppColors.info,
                           ),
                         ),

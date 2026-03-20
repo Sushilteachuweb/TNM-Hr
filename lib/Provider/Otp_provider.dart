@@ -137,6 +137,9 @@ class OtpProvider with ChangeNotifier {
                 profileImage: profileData['profilePhoto']?.toString() ?? profileData['profileImage']?.toString(),
               );
               
+              // Existing user has a complete profile
+              await UserStorage.setProfileComplete(true);
+              
               print('✅ User storage updated with profile data');
               
               // Verify data was saved

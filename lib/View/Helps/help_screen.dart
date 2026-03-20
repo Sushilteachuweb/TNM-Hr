@@ -479,7 +479,7 @@ class _HelpScreenState extends State<HelpScreen> {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      result['message'] ?? 'Report submitted successfully! We\'ll review it shortly.',
+                      'Report submitted successfully! Our team will connect with you within 24 hours.',
                       style: AppTextStyles.body2.copyWith(color: Colors.white),
                     ),
                   ),

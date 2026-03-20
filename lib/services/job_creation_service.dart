@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../Provider/job_provider.dart';
 import '../models/job_plan_model.dart';
 import '../core/app_colors.dart';
+import '../utils/job_error_helper.dart';
 
 class JobCreationService {
   /// Creates a job as draft (no credit deduction)
@@ -56,24 +57,28 @@ class JobCreationService {
         }
         return null;
       } else {
-        // Show error message
+        // Show user-friendly error message
         if (context.mounted) {
+          final msg = JobErrorHelper.parse(jobProvider.rawErrorMessage);
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(jobProvider.errorMessage),
+              content: Text(msg),
               backgroundColor: AppColors.error,
+              behavior: SnackBarBehavior.floating,
+              duration: const Duration(seconds: 4),
             ),
           );
         }
         return null;
       }
     } catch (e) {
-      // Show error message
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('Unable to create job. Please try again.'),
+          const SnackBar(
+            content: Text('Unable to create job. Please check your connection and try again.'),
             backgroundColor: AppColors.error,
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 4),
           ),
         );
       }

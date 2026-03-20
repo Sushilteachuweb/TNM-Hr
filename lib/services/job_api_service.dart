@@ -85,7 +85,7 @@ class JobApiService {
         'openings': openings,
         'isWalkInInterview': isWalkInInterview,
         'additionalPerks': additionalPerks, // Keep as array - API expects array
-        'documents': documents.join(', '), // Convert array to comma-separated string
+        'documents': documents.join(', '), // create API expects comma-separated string
         'communicationPreference': communicationPreference,
         'workingDays': workingDays,
         'jobTiming': jobTiming,
@@ -133,7 +133,7 @@ class JobApiService {
         print("═══════════════════════════════════════");
         return {
           'success': false,
-          'message': data['message']?.toString() ?? 'Failed to create job',
+          'message': data['message'], // preserve raw (String or List) for friendly parsing
         };
       }
     } on TimeoutException catch (e) {
@@ -342,20 +342,59 @@ class JobApiService {
   static Future<Map<String, dynamic>> updateJob({
     required String jobId,
     String? title,
-    String? description,
-    int? salary,
-    String? location,
+    String? companyName,
+    String? jobType,
+    String? salaryType,
+    Map<String, int>? salaryRange,
+    String? workLocation,
+    String? jobLocation,
+    String? preferredLocation,
+    String? officeAddress,
+    String? floorDetails,
+    List<double>? coordinates,
+    String? minimumEducation,
+    String? englishLevel,
+    String? totalExperience,
+    String? jobDescription,
+    Map<String, int>? ageRange,
+    String? gender,
+    int? openings,
+    bool? isWalkInInterview,
+    List<String>? additionalPerks,
+    List<String>? documents,
+    String? communicationPreference,
+    String? workingDays,
+    String? jobTiming,
   }) async {
     try {
       final uri = Uri.parse(ApiConfig.updateJob(jobId));
-
       print("💼 Calling Update Job API: $uri");
 
       final body = <String, dynamic>{};
       if (title != null) body['title'] = title;
-      if (description != null) body['description'] = description;
-      if (salary != null) body['salary'] = salary;
-      if (location != null) body['location'] = location;
+      if (companyName != null) body['companyName'] = companyName;
+      if (jobType != null) body['jobType'] = jobType;
+      if (salaryType != null) body['salaryType'] = salaryType;
+      if (salaryRange != null) body['salaryRange'] = salaryRange;
+      if (workLocation != null) body['workLocation'] = workLocation;
+      if (jobLocation != null) body['jobLocation'] = jobLocation;
+      if (preferredLocation != null) body['preferredLocation'] = preferredLocation;
+      if (officeAddress != null) body['officeAddress'] = officeAddress;
+      if (floorDetails != null) body['floorDetails'] = floorDetails;
+      if (coordinates != null) body['coordinates'] = coordinates;
+      if (minimumEducation != null) body['minimumEducation'] = minimumEducation;
+      if (englishLevel != null) body['englishLevel'] = englishLevel;
+      if (totalExperience != null) body['totalExperience'] = totalExperience;
+      if (jobDescription != null) body['jobDescription'] = jobDescription;
+      if (ageRange != null) body['ageRange'] = ageRange;
+      if (gender != null) body['gender'] = gender;
+      if (openings != null) body['openings'] = openings;
+      if (isWalkInInterview != null) body['isWalkInInterview'] = isWalkInInterview;
+      if (additionalPerks != null) body['additionalPerks'] = additionalPerks;
+      if (documents != null) body['documents'] = documents; // Send as array - API expects array
+      if (communicationPreference != null) body['communicationPreference'] = communicationPreference;
+      if (workingDays != null) body['workingDays'] = workingDays;
+      if (jobTiming != null) body['jobTiming'] = jobTiming;
 
       print("💼 Request Body: $body");
 
@@ -384,7 +423,7 @@ class JobApiService {
         print("❌ Update Job failed: ${data['message']}");
         return {
           'success': false,
-          'message': data['message']?.toString() ?? 'Failed to update job',
+          'message': data['message'], // preserve raw (String or List) for friendly parsing
         };
       }
     } on TimeoutException catch (e) {

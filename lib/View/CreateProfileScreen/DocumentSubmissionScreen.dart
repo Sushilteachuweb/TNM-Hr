@@ -304,6 +304,9 @@ class _DocumentSubmissionScreenState extends State<DocumentSubmissionScreen> {
         profileImage: profilePhotoUrl, // Use URL from API instead of local path
         verificationDocument: verificationDocumentUrl, // Save verification document URL
       );
+
+      // Mark profile as fully completed
+      await UserStorage.setProfileComplete(true);
       
       print('✅ Saved to storage - verificationDocument: $verificationDocumentUrl');
 
@@ -371,6 +374,8 @@ class _DocumentSubmissionScreenState extends State<DocumentSubmissionScreen> {
               const SizedBox(height: 32),
               _buildSubmitButton(),
               const SizedBox(height: 24),
+              _buildContactNote(),
+              const SizedBox(height: 12),
               _buildSupportSection(),
               const SizedBox(height: 20),
             ],
@@ -627,6 +632,33 @@ class _DocumentSubmissionScreenState extends State<DocumentSubmissionScreen> {
                 "Complete Profile",
                 style: AppTextStyles.button.copyWith(color: Colors.white),
               ),
+      ),
+    );
+  }
+
+  Widget _buildContactNote() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: AppColors.primary.withOpacity(0.07),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.primary.withOpacity(0.2)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.info_outline, size: 18, color: AppColors.primary),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              "If you do not have any document as mentioned above, contact us for registration assistance.",
+              style: AppTextStyles.body2.copyWith(
+                color: AppColors.primary,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

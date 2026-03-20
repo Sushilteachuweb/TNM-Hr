@@ -6,7 +6,7 @@ class JobPlan {
   final String description;
   final int pricePerMonth;
   final int originalPrice;
-  final int discountPercent;
+  final double discountPercent;
   final int credits;
   final int validityDays;
   final int jobActiveDays;
@@ -15,6 +15,9 @@ class JobPlan {
   final bool whatsappLead;
   final bool isRecommended;
   final bool isCustom;
+  final int dbCredits;
+  final double gstPercent;
+  final double? gstAmount;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -33,6 +36,9 @@ class JobPlan {
     required this.whatsappLead,
     required this.isRecommended,
     required this.isCustom,
+    required this.dbCredits,
+    required this.gstPercent,
+    this.gstAmount,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -44,7 +50,7 @@ class JobPlan {
       description: json['description'] ?? '',
       pricePerMonth: json['pricePerMonth'] ?? 0,
       originalPrice: json['originalPrice'] ?? 0,
-      discountPercent: json['discountPercent'] ?? 0,
+      discountPercent: (json['discountPercent'] ?? 0).toDouble(),
       credits: json['credits'] ?? 0,
       validityDays: json['validityDays'] ?? 0,
       jobActiveDays: json['jobActiveDays'] ?? 0,
@@ -53,6 +59,9 @@ class JobPlan {
       whatsappLead: json['whatsappLead'] ?? false,
       isRecommended: json['isRecommended'] ?? false,
       isCustom: json['isCustom'] ?? false,
+      dbCredits: json['dbCredits'] ?? 0,
+      gstPercent: (json['gstPercent'] ?? 0).toDouble(),
+      gstAmount: json['gstAmount'] != null ? (json['gstAmount']).toDouble() : null,
       createdAt: DateTime.parse(json['createdAt'] ?? DateTime.now().toIso8601String()),
       updatedAt: DateTime.parse(json['updatedAt'] ?? DateTime.now().toIso8601String()),
     );
@@ -74,6 +83,9 @@ class JobPlan {
       'whatsappLead': whatsappLead,
       'isRecommended': isRecommended,
       'isCustom': isCustom,
+      'dbCredits': dbCredits,
+      'gstPercent': gstPercent,
+      if (gstAmount != null) 'gstAmount': gstAmount,
       'createdAt': createdAt.toIso8601String(),
       'updatedAt': updatedAt.toIso8601String(),
     };

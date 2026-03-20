@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 import '../../../../core/app_colors.dart';
 import '../../../../core/app_text_styles.dart';
 import '../../../../services/job_creation_service.dart';
@@ -73,16 +72,10 @@ class _SubscriptionState extends State<Subscription> {
           );
         }
       } else {
-        // Job creation failed
+        // Job creation failed - error already shown by JobCreationService
         print("❌ Failed to create job as draft");
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: const Text('Failed to create job. Please try again.'),
-              backgroundColor: AppColors.error,
-            ),
-          );
-          // Go back to previous screen
+          // Go back to previous screen so user can fix and retry
           Navigator.of(context).pop();
         }
       }
@@ -95,12 +88,13 @@ class _SubscriptionState extends State<Subscription> {
       print("❌ Job creation failed with error: $e");
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('Failed to create job. Please try again.'),
+          const SnackBar(
+            content: Text('Unable to create job. Please check your connection and try again.'),
             backgroundColor: AppColors.error,
+            behavior: SnackBarBehavior.floating,
+            duration: Duration(seconds: 4),
           ),
         );
-        // Go back to previous screen
         Navigator.of(context).pop();
       }
     }

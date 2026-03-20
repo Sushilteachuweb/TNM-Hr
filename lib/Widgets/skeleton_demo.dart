@@ -37,7 +37,7 @@ class _SkeletonDemoState extends State<SkeletonDemo> {
                 _showSkeleton = value;
               });
             },
-            activeColor: AppColors.primary,
+            activeThumbColor: AppColors.primary,
           ),
         ],
       ),

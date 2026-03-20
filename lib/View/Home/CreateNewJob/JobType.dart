@@ -11,12 +11,10 @@ class JobType extends StatelessWidget {
   Widget build(BuildContext context) {
     final formProvider = Provider.of<JobFormProvider>(context);
     
-    // Map display text to API values
-    // Try different formats to match API expectations
     final Map<String, String> jobTypeOptions = {
       "Full Time": "Full Time",
-      "Part Time": "Part Time", 
-      "Internship": "Internship",
+      "Part Time": "Part Time",
+      "Both (Full - Part Time)": "Both (Full - Part Time)",
     };
 
     return Wrap(

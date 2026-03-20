@@ -3,13 +3,16 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:google_places_flutter/google_places_flutter.dart';
 import 'package:google_places_flutter/model/prediction.dart';
+import 'package:flutter_html/flutter_html.dart';
 import '../../../core/app_colors.dart';
 import '../../../core/app_text_styles.dart';
 import '../../../Provider/job_form_provider.dart';
 import '../../../Provider/hr_profile_provider.dart';
 import '../../../services/user_storage.dart';
 import '../../../data/indian_states_cities.dart';
+import '../../../utils/job_error_helper.dart';
 import 'JobLocationEmploymentPage.dart';
+import '../CreateNewJobDetails/job_description_editor.dart';
 
 class JobBasicDetailsPage extends StatefulWidget {
   const JobBasicDetailsPage({super.key});
@@ -37,7 +40,7 @@ class _JobBasicDetailsPageState extends State<JobBasicDetailsPage> {
   final _preferredLocationFocusNode = FocusNode();
 
   // Options based on website screenshots
-  final List<String> jobTypes = ["Full Time", "Part Time", "Both (Full + Part Time)"];
+  final List<String> jobTypes = ["Full Time", "Part Time", "Both (Full - Part Time)"];
   final List<String> salaryTypes = ["Fixed Only", "Fixed + Incentive", "Incentive Only"];
   final List<String> educationLevels = [
     "10th or Below 10th", 
@@ -65,7 +68,10 @@ class _JobBasicDetailsPageState extends State<JobBasicDetailsPage> {
     super.initState();
     final formProvider = Provider.of<JobFormProvider>(context, listen: false);
     final hrProfileProvider = Provider.of<HrProfileProvider>(context, listen: false);
-    
+
+    // Reset form so no stale data from a previous edit session leaks in
+    formProvider.resetForm();
+
     // Load job categories from API after the build is complete
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       formProvider.fetchJobCategories();
@@ -417,45 +423,47 @@ class _JobBasicDetailsPageState extends State<JobBasicDetailsPage> {
         ),
         const SizedBox(height: 16),
         
-        // Salary Range
-        Text(
-          "Salary Range / Month *",
-          style: AppTextStyles.subtitle2.copyWith(
-            color: AppColors.textPrimary,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        const SizedBox(height: 8),
-        Row(
-          children: [
-            Expanded(
-              child: _buildTextField(
-                controller: _minSalaryController,
-                label: "Minimum Salary",
-                hint: "₹ 10000",
-                keyboardType: TextInputType.number,
-                onChanged: (value) => formProvider.setSalaryRange(value, _maxSalaryController.text),
-              ),
+        // Salary Range - hidden for Incentive Only
+        if (formProvider.salaryType != 'Incentive Only') ...[
+          Text(
+            "Salary Range / Month *",
+            style: AppTextStyles.subtitle2.copyWith(
+              color: AppColors.textPrimary,
+              fontWeight: FontWeight.w600,
             ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: _buildTextField(
-                controller: _maxSalaryController,
-                label: "Maximum Salary",
-                hint: "₹ 25000",
-                keyboardType: TextInputType.number,
-                onChanged: (value) => formProvider.setSalaryRange(_minSalaryController.text, value),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        Text(
-          "Salary Range: ₹10,000 - ₹50,000 per month",
-          style: AppTextStyles.caption.copyWith(
-            color: AppColors.textSecondary,
           ),
-        ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: _buildTextField(
+                  controller: _minSalaryController,
+                  label: "Minimum Salary",
+                  hint: "₹ 10000",
+                  keyboardType: TextInputType.number,
+                  onChanged: (value) => formProvider.setSalaryRange(value, _maxSalaryController.text),
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: _buildTextField(
+                  controller: _maxSalaryController,
+                  label: "Maximum Salary",
+                  hint: "₹ 25000",
+                  keyboardType: TextInputType.number,
+                  onChanged: (value) => formProvider.setSalaryRange(_minSalaryController.text, value),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            "Salary Range: ₹10,000 - ₹50,000 per month",
+            style: AppTextStyles.caption.copyWith(
+              color: AppColors.textSecondary,
+            ),
+          ),
+        ],
       ],
     );
   }
@@ -559,12 +567,106 @@ class _JobBasicDetailsPageState extends State<JobBasicDetailsPage> {
         const SizedBox(height: 16),
         
         // Job Description
-        _buildTextField(
-          controller: _jobDescriptionController,
-          label: "Job Description",
-          hint: "Describe the job role and responsibilities...",
-          maxLines: 4,
-          onChanged: (value) => formProvider.setJobDescription(value),
+        Text(
+          "Job Description",
+          style: AppTextStyles.subtitle2.copyWith(
+            color: AppColors.textPrimary,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 8),
+        GestureDetector(
+          onTap: () async {
+            final result = await Navigator.push<Map<String, String>>(
+              context,
+              MaterialPageRoute(
+                builder: (context) => JobDescriptionEditor(
+                  initialDescription: formProvider.jobDescription,
+                  initialDelta: formProvider.jobDescriptionDelta.isNotEmpty 
+                      ? formProvider.jobDescriptionDelta 
+                      : null,
+                ),
+              ),
+            );
+            
+            if (result != null) {
+              final html = result['html'] ?? '';
+              final delta = result['delta'] ?? '';
+              print('📋 Received HTML in preview: $html');
+              print('📋 Received Delta: $delta');
+              formProvider.setJobDescription(html, delta: delta);
+              _jobDescriptionController.text = html;
+            }
+          },
+          child: Container(
+            width: double.infinity,
+            constraints: const BoxConstraints(minHeight: 100),
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: formProvider.jobDescription.isEmpty 
+                    ? AppColors.border 
+                    : AppColors.primary,
+                width: formProvider.jobDescription.isEmpty ? 1 : 2,
+              ),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: formProvider.jobDescription.isEmpty
+                      ? Text(
+                          "Tap to write job description...",
+                          style: AppTextStyles.body1.copyWith(
+                            color: AppColors.textHint,
+                            height: 1.5,
+                          ),
+                        )
+                      : Html(
+                          data: formProvider.jobDescription,
+                          style: {
+                            "body": Style(
+                              margin: Margins.zero,
+                              padding: HtmlPaddings.zero,
+                              fontSize: FontSize(16),
+                              color: AppColors.textPrimary,
+                              lineHeight: const LineHeight(1.5),
+                            ),
+                            "b": Style(
+                              fontWeight: FontWeight.bold,
+                            ),
+                            "i": Style(
+                              fontStyle: FontStyle.italic,
+                            ),
+                            "ul": Style(
+                              margin: Margins.only(left: 0, top: 4, bottom: 4),
+                              padding: HtmlPaddings.only(left: 20),
+                              display: Display.block,
+                            ),
+                            "ol": Style(
+                              margin: Margins.only(left: 0, top: 4, bottom: 4),
+                              padding: HtmlPaddings.only(left: 20),
+                              display: Display.block,
+                            ),
+                            "li": Style(
+                              margin: Margins.only(bottom: 4),
+                              padding: HtmlPaddings.zero,
+                              display: Display.listItem,
+                            ),
+                          },
+                        ),
+                ),
+                const SizedBox(width: 8),
+                Icon(
+                  Icons.edit_outlined,
+                  color: AppColors.primary,
+                  size: 20,
+                ),
+              ],
+            ),
+          ),
         ),
       ],
     );
@@ -847,7 +949,7 @@ class _JobBasicDetailsPageState extends State<JobBasicDetailsPage> {
         ),
         const SizedBox(height: 8),
         DropdownButtonFormField<String>(
-          value: value,
+          initialValue: value,
           isExpanded: true, // This prevents overflow
           items: items.map((item) {
             if (item.isEmpty) {
@@ -919,7 +1021,7 @@ class _JobBasicDetailsPageState extends State<JobBasicDetailsPage> {
         ),
         const SizedBox(height: 8),
         DropdownButtonFormField<String>(
-          value: value,
+          initialValue: value,
           items: items.asMap().entries.map((entry) {
             int index = entry.key;
             String item = entry.value;
@@ -1021,10 +1123,23 @@ class _JobBasicDetailsPageState extends State<JobBasicDetailsPage> {
                     ),
                   );
                 } else {
+                  final msg = JobErrorHelper.page1ValidationMessage(
+                    companyName: formProvider.companyName,
+                    jobTitle: formProvider.jobTitle,
+                    jobCategory: formProvider.jobCategory,
+                    jobType: formProvider.jobType,
+                    salaryType: formProvider.salaryType,
+                    minSalary: formProvider.minSalary,
+                    maxSalary: formProvider.maxSalary,
+                    minimumEducation: formProvider.minimumEducation,
+                    preferredLocation: formProvider.preferredLocation,
+                    jobDescription: formProvider.jobDescription,
+                  );
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
-                      content: Text('Please fill all required fields'),
+                      content: Text(msg),
                       backgroundColor: AppColors.error,
+                      behavior: SnackBarBehavior.floating,
                     ),
                   );
                 }

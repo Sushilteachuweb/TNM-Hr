@@ -314,7 +314,7 @@ class _ReferEarnScreenState extends State<ReferEarnScreen>
                       style: AppTextStyles.h4,
                     ),
                     Text(
-                      "Share with friends and earn database access credits",
+                      "Share with friends and 10 earn database access credits",
                       style: AppTextStyles.caption,
                     ),
                   ],
@@ -778,7 +778,7 @@ class _ReferEarnScreenState extends State<ReferEarnScreen>
           _buildBenefitItem(
             Icons.stars,
             "Database Access Credits",
-            "Get credits to unlock and view candidate contact details and profiles",
+            "Get 5 credits to unlock and view candidate contact details and profiles",
             Colors.orange,
           ),
         ],

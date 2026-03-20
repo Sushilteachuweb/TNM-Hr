@@ -247,18 +247,25 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  bool _chatLoading = false;
+
   Widget _buildBottomActions() {
     return SizedBox(
       width: double.infinity,
       child: _buildActionCard(
         icon: Icons.chat_bubble_outline_rounded,
         title: "Chat With Us",
+        isLoading: _chatLoading,
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [Color(0xFF45B7D1), Color(0xFF3A9BC1)],
+          colors: [Color(0xFF007AB5), Color(0xFF005F8E)],
         ),
-        onTap: () {
+        onTap: () async {
+          setState(() => _chatLoading = true);
+          await Future.delayed(const Duration(milliseconds: 800));
+          if (!mounted) return;
+          setState(() => _chatLoading = false);
           Navigator.push(
             context,
             MaterialPageRoute(
@@ -305,10 +312,11 @@ class _HomeScreenState extends State<HomeScreen> {
     required String title,
     required Gradient gradient,
     String? subtitle,
+    bool isLoading = false,
     required VoidCallback onTap,
   }) {
     return InkWell(
-      onTap: onTap,
+      onTap: isLoading ? null : onTap,
       borderRadius: BorderRadius.circular(16),
       child: Container(
         height: 140,
@@ -325,43 +333,50 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ],
         ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.2),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(icon, color: Colors.white, size: 22),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              title,
-              textAlign: TextAlign.center,
-              style: AppTextStyles.subtitle2.copyWith(
-                color: Colors.white,
-                fontWeight: FontWeight.w600,
-                fontSize: 13,
-              ),
-            ),
-            if (subtitle != null) ...[
-              const SizedBox(height: 3),
-              Text(
-                subtitle,
-                textAlign: TextAlign.center,
-                style: AppTextStyles.caption.copyWith(
-                  color: Colors.white.withOpacity(0.8),
-                  fontSize: 9,
-                  fontWeight: FontWeight.w500,
+        child: isLoading
+            ? const Center(
+                child: CircularProgressIndicator(
+                  color: Colors.white,
+                  strokeWidth: 2.5,
                 ),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
+              )
+            : Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(icon, color: Colors.white, size: 22),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    title,
+                    textAlign: TextAlign.center,
+                    style: AppTextStyles.subtitle2.copyWith(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 13,
+                    ),
+                  ),
+                  if (subtitle != null) ...[
+                    const SizedBox(height: 3),
+                    Text(
+                      subtitle,
+                      textAlign: TextAlign.center,
+                      style: AppTextStyles.caption.copyWith(
+                        color: Colors.white.withOpacity(0.8),
+                        fontSize: 9,
+                        fontWeight: FontWeight.w500,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ],
               ),
-            ],
-          ],
-        ),
       ),
     );
   }
@@ -440,14 +455,14 @@ class _HomeScreenState extends State<HomeScreen> {
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [
-            Color(0xFF5B73E8),
-            Color(0xFF4C63D2),
+            Color(0xFF007AB5),
+            Color(0xFF005F8E),
           ],
         ),
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Color(0xFF5B73E8).withOpacity(0.25),
+            color: Color(0xFF007AB5).withOpacity(0.25),
             blurRadius: 12,
             offset: const Offset(0, 6),
             spreadRadius: 0,
@@ -489,7 +504,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   label: const Text("Post New Job"),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.white,
-                    foregroundColor: Color(0xFF4C63D2),
+                    foregroundColor: Color(0xFF007AB5),
                     elevation: 0,
                     padding: const EdgeInsets.symmetric(
                       horizontal: 16,
@@ -550,7 +565,7 @@ class _HomeScreenState extends State<HomeScreen> {
           value: activeJobs.toString(),
           icon: Icons.work_outline_rounded,
           gradient: LinearGradient(
-            colors: [Color(0xFF5B73E8), Color(0xFF4C63D2)],
+            colors: [Color(0xFF007AB5), Color(0xFF005F8E)],
           ),
         ),
         _buildStatCard(
@@ -558,7 +573,7 @@ class _HomeScreenState extends State<HomeScreen> {
           value: totalJobs.toString(),
           icon: Icons.folder_outlined,
           gradient: LinearGradient(
-            colors: [Color(0xFFFF6B6B), Color(0xFFEE5A52)],
+            colors: [Color(0xFF007AB5), Color(0xFF005F8E)],
           ),
         ),
         _buildStatCard(
@@ -566,7 +581,7 @@ class _HomeScreenState extends State<HomeScreen> {
           value: _loadingCandidatesCount ? "..." : _appliedCandidatesCount.toString(),
           icon: Icons.people_outline_rounded,
           gradient: LinearGradient(
-            colors: [Color(0xFF4ECDC4), Color(0xFF44A08D)],
+            colors: [Color(0xFFF3A534), Color(0xFFD4880A)],
           ),
         ),
         _buildStatCard(
@@ -574,7 +589,7 @@ class _HomeScreenState extends State<HomeScreen> {
           value: unifiedBillingProvider.isLoading ? "..." : unifiedBillingProvider.remainingCredits.toString(),
           icon: Icons.account_balance_wallet_outlined,
           gradient: LinearGradient(
-            colors: [Color(0xFF45B7D1), Color(0xFF3A9BC1)],
+            colors: [Color(0xFFF3A534), Color(0xFFD4880A)],
           ),
         ),
       ],
@@ -823,6 +838,11 @@ class _HomeScreenState extends State<HomeScreen> {
         statusBgColor = Colors.orange.withOpacity(0.1);
         statusText = 'Pending';
         break;
+      case 'draft':
+        statusColor = Colors.blue;
+        statusBgColor = Colors.blue.withOpacity(0.1);
+        statusText = 'Draft';
+        break;
       case 'closed':
         statusColor = Colors.red;
         statusBgColor = Colors.red.withOpacity(0.1);
@@ -831,7 +851,7 @@ class _HomeScreenState extends State<HomeScreen> {
       default:
         statusColor = Colors.grey;
         statusBgColor = Colors.grey.withOpacity(0.1);
-        statusText = 'Unknown';
+        statusText = 'Pending';
     }
 
     return InkWell(
@@ -887,38 +907,40 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   ),
                 ),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 8,
-                  ),
-                  decoration: BoxDecoration(
-                    color: AppColors.primary.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: AppColors.primary.withOpacity(0.2),
-                      width: 1,
+                // Only show applicants count for active jobs
+                if (status.toLowerCase() == 'active')
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 8,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: AppColors.primary.withOpacity(0.2),
+                        width: 1,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.people_outline,
+                          size: 16,
+                          color: AppColors.primary,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          "$applicantsCount",
+                          style: AppTextStyles.caption.copyWith(
+                            color: AppColors.primary,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.people_outline,
-                        size: 16,
-                        color: AppColors.primary,
-                      ),
-                      const SizedBox(width: 6),
-                      Text(
-                        "$applicantsCount",
-                        style: AppTextStyles.caption.copyWith(
-                          color: AppColors.primary,
-                          fontWeight: FontWeight.w600,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
               ],
             ),
             const SizedBox(height: 16),

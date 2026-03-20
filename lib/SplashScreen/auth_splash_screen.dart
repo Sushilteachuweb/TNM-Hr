@@ -5,6 +5,7 @@ import '../services/app_data_manager.dart';
 import '../Provider/hr_profile_provider.dart';
 import '../View/Screens/Select_Services.dart';
 import '../View/bottomNavBar/bottomNavBar.dart';
+import '../View/CreateProfileScreen/CreateProfileScreen.dart';
 import '../core/app_colors.dart';
 import '../core/app_text_styles.dart';
 
@@ -70,6 +71,28 @@ class _AuthSplashScreenState extends State<AuthSplashScreen>
       if (isLoggedIn) {
         final userData = await UserStorage.getLoginData();
         print("🔍 Auth Check - User Data: $userData");
+
+        // Check if profile creation was fully completed
+        final profileComplete = await UserStorage.isProfileComplete();
+        print("🔍 Auth Check - Is Profile Complete: $profileComplete");
+
+        if (!profileComplete) {
+          // User logged in but never finished profile creation — send them back
+          print("⚠️ Profile incomplete, redirecting to CreateProfileScreen");
+          Navigator.pushReplacement(
+            context,
+            PageRouteBuilder(
+              pageBuilder: (context, animation, secondaryAnimation) =>
+                  const CreateProfileScreen(),
+              transitionsBuilder:
+                  (context, animation, secondaryAnimation, child) {
+                    return FadeTransition(opacity: animation, child: child);
+                  },
+              transitionDuration: const Duration(milliseconds: 600),
+            ),
+          );
+          return;
+        }
 
         // Load HR profile data
         final hrProfileProvider = Provider.of<HrProfileProvider>(context, listen: false);
