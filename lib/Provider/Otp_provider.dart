@@ -3,6 +3,7 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import '../services/auth_api_service.dart';
 import '../services/user_storage.dart';
 import '../services/hr_profile_api_service.dart';
+import '../services/fcm_service.dart';
 
 class OtpProvider with ChangeNotifier {
   bool _isLoading = false;
@@ -60,6 +61,14 @@ class OtpProvider with ChangeNotifier {
       );
       
       print('💾 Login data saved to storage');
+
+      // Fetch FCM token after successful login and send to backend
+      final fcmToken = await FcmService.getToken();
+      if (fcmToken != null) {
+        print('📲 FCM Token ready, sending to backend...');
+        await FcmService.updateToken();
+        await FcmService.sendTestNotification();
+      }
 
       // Fetch complete HR profile for existing users
       if (result['isExistingUser'] == true) {

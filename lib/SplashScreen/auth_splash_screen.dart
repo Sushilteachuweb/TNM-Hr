@@ -198,20 +198,11 @@ class _AuthSplashScreenState extends State<AuthSplashScreen>
                   child: Column(
                     children: [
                       Text(
-                        "Rozgar Ka",
+                        "Rozgar Ka Digital Saathi",
                         style: AppTextStyles.h2.copyWith(
                           color: Colors.white,
-                          fontSize: 32,
+                          fontSize: 28,
                           fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        "Digital Saathi",
-                        style: AppTextStyles.h3.copyWith(
-                          color: Colors.white.withOpacity(0.9),
-                          fontWeight: FontWeight.w400,
-                          fontSize: 24,
                         ),
                       ),
                       const SizedBox(height: 24),

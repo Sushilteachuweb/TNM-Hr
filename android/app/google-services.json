@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "447064706046",
+    "project_id": "tnmapp-99a67",
+    "storage_bucket": "tnmapp-99a67.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:447064706046:android:85b2d88050b6f531554eaf",
+        "android_client_info": {
+          "package_name": "com.arp.naukrimitra.jobs"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDL6BIPmkoqPaiGV9ZXVjOo2hoEsSfgdeo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:447064706046:android:844b1f3d89999d73554eaf",
+        "android_client_info": {
+          "package_name": "com.techuweb.hrportal"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDL6BIPmkoqPaiGV9ZXVjOo2hoEsSfgdeo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

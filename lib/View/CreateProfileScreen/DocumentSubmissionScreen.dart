@@ -9,6 +9,7 @@ import '../../core/app_text_styles.dart';
 import '../../services/user_storage.dart';
 import '../../services/auth_api_service.dart';
 import '../../services/app_data_manager.dart';
+import '../../services/fcm_service.dart';
 import 'dart:io';
 
 class DocumentSubmissionScreen extends StatefulWidget {
@@ -311,6 +312,10 @@ class _DocumentSubmissionScreenState extends State<DocumentSubmissionScreen> {
       print('✅ Saved to storage - verificationDocument: $verificationDocumentUrl');
 
       print("✅ Profile created successfully");
+
+      // Save FCM token to backend now that session cookie is established
+      await FcmService.getToken();
+      await FcmService.updateToken();
 
       // Initialize app data for new users
       print("🚀 Initializing app data after profile creation...");

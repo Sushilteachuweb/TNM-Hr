@@ -27,16 +27,18 @@ class AppColors {
   static const Color divider = Color(0xFFE2E8F0);
   static const Color border = Color(0xFFCBD5E1);
 
+  // "I want to Hire" button — orange-yellow gradient
   static LinearGradient primaryGradient = LinearGradient(
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
-    colors: [primary, primaryLight],
+    colors: [Color(0xFFFF6B35), Color(0xFFFF8E53), Color(0xFFFFA726)],
   );
 
+  // "I want a Job" button — blue gradient
   static LinearGradient successGradient = LinearGradient(
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
-    colors: [success, secondary],
+    colors: [Color(0xFF2196F3), Color(0xFF1390EF), Color(0xFF1A7BC7)],
   );
 
   static LinearGradient backgroundGradient = LinearGradient(
